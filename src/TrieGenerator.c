@@ -94,7 +94,6 @@ char *get_token_type(char *in)
     printf("%s\n", in);
     if (strcmp(in, "+") == 0)
     {
-        printf("plusfsdf\n", in);
         return "Plus";
     }
     else if (strcmp(in, "++") == 0)

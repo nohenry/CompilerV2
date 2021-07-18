@@ -1,7 +1,7 @@
-CCX=C:/Program\ Files/LLVM/bin/clang++.exe
+CCX=clang++
 LIB_PATH=
-LD=C:/Program\ Files/LLVM/bin/clang++.exe
-CFLAGS=-g -Winitializer-overrides -D_CRT_SECURE_NO_WARNINGS -DDEBUG -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -D__STDC_LIMIT_MACROS -IE:\llvm-project\build\include -IE:/llvm-project/llvm/include -DPLATFORM_WINDOWS
+LD=clang++
+CFLAGS=-g `llvm-config --cxxflags`
 
 all: dsl
 
@@ -11,10 +11,10 @@ out/%.o: src/%.cpp
 
 dsl: out/main.o out/Parser.o out/Tokenizer.o out/Codegen.o out/Trie.o out/Log.o out/Colors.o
 	mkdir -p bin
-	$(LD) $^ `./config.sh` -g -O0 -o bin/$@.exe
+	$(LD) $^ `llvm-config --cxxflags --ldflags --libs core executionengine analysis native bitwriter --system-libs` -g -O0 -o bin/$@
 
 run: dsl
-	bin/dsl.exe
+	bin/dsl
 
 clean:
 	rm -r bin out

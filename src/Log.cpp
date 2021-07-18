@@ -1,4 +1,6 @@
 #include <Log.hpp>
+#include <stdint.h>
+#include <cmath>
 
 void PrintFormat(std::string s, std::ostream &stream)
 {
@@ -22,7 +24,7 @@ std::pair<uint64_t, char *> StringToValue(const char *str)
     else
     {
         val += ret.first;
-        val += (*str - '0') * pow(10, distance - 2);
+        val += (*str - '0') * std::pow(10, distance - 2);
     }
 
     return std::make_pair(val, ret.second);

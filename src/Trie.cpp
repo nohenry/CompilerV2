@@ -100,17 +100,7 @@ const char *TokenTypeString(TokenType e)
         ets(Return);
         ets(Int);
         ets(Uint);
-        ets(Uint8);
-        ets(Int8);
-        ets(Uint16);
-        ets(Int16);
-        ets(Uint32);
-        ets(Int32);
-        ets(Uint64);
-        ets(Int64);
         ets(Float);
-        ets(Float32);
-        ets(Float64);
         ets(Char);
         ets(Bool);
         ets(Spec);
@@ -128,6 +118,10 @@ const char *TokenTypeString(TokenType e)
         ets(Type);
         ets(Identifier);
         ets(Tokens);
+        ets(Export);
+        ets(Yield);
+        ets(As);
+        ets(Const);
         ets(Eof);
     }
 #undef ets
@@ -210,17 +204,7 @@ std::ostream &operator<<(std::ostream &stream, const TokenType &e)
         ets(Return);
         ets(Int);
         ets(Uint);
-        ets(Uint8);
-        ets(Int8);
-        ets(Uint16);
-        ets(Int16);
-        ets(Uint32);
-        ets(Int32);
-        ets(Uint64);
-        ets(Int64);
         ets(Float);
-        ets(Float32);
-        ets(Float64);
         ets(Char);
         ets(Bool);
         ets(Spec);
@@ -237,7 +221,11 @@ std::ostream &operator<<(std::ostream &stream, const TokenType &e)
         ets(Function);
         ets(Type);
         ets(Identifier);
+        ets(Export);
         ets(Tokens);
+        ets(Yield);
+        ets(As);
+        ets(Const);
         ets(Eof);
     }
 #undef ets

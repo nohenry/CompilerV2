@@ -1,7 +1,6 @@
 #include <llvm/IR/Type.h>
 #include <Tokenizer.hpp>
 #include <Parser.hpp>
-#include <Windows.h>
 
 int main()
 {
@@ -15,7 +14,8 @@ int main()
     
     if(!tokenizer.IsDirty()) {
         Parsing::Parser parser(tokenList, tokenizer.GetFileIterator());
-        parser.Parse();
+        parser.ParseModule();
     }
+
     return 0;
 }

@@ -78,7 +78,9 @@ Tokenizer::IterateType Tokenizer::IterateTrieRec(const TrieNode &node, bool use,
     auto f = fptr.Offset();
     if (use && node.term && node == c)
     {
-        Token token(node.GetType(), TokenPosition(startPosition, pos));
+        auto str = std::string(TokenTypeString(node.GetType()));
+        str[0] = tolower(str[0]);
+        Token token(node.GetType(), TokenPosition(startPosition, pos), str);
         return std::make_tuple(token, static_cast<uint8_t>(s + 1));
     }
 
@@ -186,6 +188,10 @@ Tokenizer::IterateType Tokenizer::Integer()
         }
         fptr--;
         Token token(TokenType::Integer, TokenPosition(pos, fptr.CalulatePosition()), str);
+        if (CheckPrimitiveTypeSize(token))
+        {
+            return std::make_tuple(TokenNull, 0);
+        }
         return std::make_tuple(token, 0);
     }
     else
@@ -256,6 +262,10 @@ Tokenizer::IterateType Tokenizer::Float()
         if (!decimal && !exponent)
         {
             Token token(TokenType::Integer, TokenPosition(pos, fptr.CalulatePosition()), str);
+            if (CheckPrimitiveTypeSize(token))
+            {
+                return std::make_tuple(TokenNull, 0);
+            }
             return std::make_tuple(token, 0);
         }
         Token token(TokenType::Floating, TokenPosition(pos, fptr.CalulatePosition()), str);
@@ -266,6 +276,21 @@ Tokenizer::IterateType Tokenizer::Float()
         fptr--;
         return std::make_tuple(TokenNull, 0);
     }
+}
+
+bool Tokenizer::CheckPrimitiveTypeSize(const Token &integer)
+{
+    if (tokenList.end() == tokenList.begin())
+        return false;
+    auto type = (tokenList.end() - 1)->type;
+    if ((type == TokenType::Uint || type == TokenType::Int || type == TokenType::Float || type == TokenType::Char) && ((tokenList.end() - 1)->position.end == integer.position.start))
+    {
+        (tokenList.end() - 1)->ivalue = integer.ivalue;
+        (tokenList.end() - 1)->position.end = integer.position.end;
+        (tokenList.end() - 1)->raw += std::to_string(integer.ivalue);
+        return true;
+    }
+    return false;
 }
 
 Tokenizer::IterateType Tokenizer::String()

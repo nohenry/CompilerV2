@@ -27,6 +27,7 @@ public:
     IterateType Identifier();
     IterateType Integer();
     IterateType Float();
+    bool CheckPrimitiveTypeSize(const Token &integer);
     IterateType String();
     bool Comment();
     IterateType IterateTrie();

@@ -12,11 +12,26 @@ namespace Parsing
     {
         None,
         Integer,
+        Floating,
+        Boolean,
+        String,
         BinaryExpression,
         UnaryExpression,
         CallExpression,
         IdentifierExpression,
-        AssignmentExpression,
+        CastExpression,
+
+        BlockStatement,
+        ExpressionStatement,
+        VariableDeclerationStatement,
+        FunctionDeclerationStatement,
+
+        PrimitiveType,
+        IdentifierType,
+        FunctionType,
+        ReferenceType,
+        TypeExpression,
+        GenericType,
     };
 
     class SyntaxNode
@@ -33,7 +48,7 @@ namespace Parsing
         template <typename T>
         const T &As() const { return *dynamic_cast<const T *>(this); }
     };
-}
+} // namespace Parsing
 
 enum class TokenType
 {
@@ -111,17 +126,7 @@ enum class TokenType
     Return,   // return
     Int,      // int
     Uint,     // uint
-    Uint8,    // uint8
-    Int8,     // int8
-    Uint16,   // uint16
-    Int16,    // int16
-    Uint32,   // uint32
-    Int32,    // int32
-    Uint64,   // uint64
-    Int64,    // int64
     Float,    // float
-    Float32,  // float32
-    Float64,  // float64
     Char,     // char
     Bool,     // bool
     Template, // template
@@ -138,6 +143,9 @@ enum class TokenType
     Function, // function
     Type,     // type
     Export,   // export
+    Yield,    // yield
+    As,       // as
+    Const,    // const
 
     Identifier,
 
@@ -212,7 +220,7 @@ struct Token : public Parsing::SyntaxNode
     {
     }
 
-    Token(TokenType type, TokenPosition position, std::string raw) : type{type}, position{position}, raw{raw}
+    Token(TokenType type, TokenPosition position, std::string raw) : type{type}, position{position}, raw{raw}, ivalue{0}
     {
         switch (type)
         {

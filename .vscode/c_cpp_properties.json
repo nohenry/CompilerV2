@@ -1,11 +1,10 @@
 {
     "configurations": [
         {
-            "name": "Win64",
+            "name": "Mac",
             "includePath": [
                 "${workspaceFolder}/src/",
-                "E:/llvm-project/llvm/include",
-                "E:/llvm-project/build/include"
+                "/usr/local/Cellar/llvm/12.0.1/include"
             ],
             "defines": [
                 "DEBUG",
@@ -16,10 +15,10 @@
                 "PLATFORM_WINDOWS"
             ],
             "windowsSdkVersion": "10.0.18362.0",
-            "compilerPath": "C:/Program Files/LLVM/bin/clang.exe",
+            "compilerPath": "/usr/bin/clang++",
             "cStandard": "c17",
-            "cppStandard": "c++20",
-            "intelliSenseMode": "windows-clang-x64"
+            "cppStandard": "c++14",
+            "intelliSenseMode": "clang-x64"
         }
     ],
     "version": 4

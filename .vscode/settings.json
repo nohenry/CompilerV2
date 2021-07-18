@@ -135,7 +135,9 @@
         "trie.h": "c",
         "xlocmon": "cpp",
         "xloctime": "cpp",
-        "token.hpp": "c"
+        "token.hpp": "c",
+        "semaphore": "cpp",
+        "__bits": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

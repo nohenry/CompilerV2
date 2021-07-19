@@ -6,6 +6,8 @@
 #include <iostream>
 #include <cassert>
 
+struct Position;
+
 namespace Parsing
 {
     enum class SyntaxType
@@ -15,16 +17,30 @@ namespace Parsing
         Floating,
         Boolean,
         String,
+        ObjectKeyValue,
+        ObjectInitializer,
+        TemplateInitializer,
         BinaryExpression,
         UnaryExpression,
         CallExpression,
         IdentifierExpression,
         CastExpression,
 
+        GenericParameterEntry,
+        GenericParameter,
+
+        TemplateStatement,
+        SpecStatement,
         BlockStatement,
         ExpressionStatement,
         VariableDeclerationStatement,
         FunctionDeclerationStatement,
+        IfStatement,
+        LoopStatement,
+        ReturnStatement,
+        YieldStatement,
+        ActionBaseStatement,
+        ActionSpecStatement,
 
         PrimitiveType,
         IdentifierType,
@@ -44,6 +60,9 @@ namespace Parsing
 
         const virtual uint8_t NumChildren() const = 0;
         const virtual SyntaxNode &operator[](int index) const = 0;
+
+        virtual const Position &GetStart() const = 0;
+        virtual const Position &GetEnd() const = 0;
 
         template <typename T>
         const T &As() const { return *dynamic_cast<const T *>(this); }
@@ -146,6 +165,7 @@ enum class TokenType
     Yield,    // yield
     As,       // as
     Const,    // const
+    Action,   // action
 
     Identifier,
 
@@ -167,7 +187,7 @@ struct Position
     }
 };
 
-struct TokenPosition
+struct Range
 {
     union
     {
@@ -179,19 +199,19 @@ struct TokenPosition
         };
     };
 
-    TokenPosition() : start{0}, end{0}
+    Range() : start{0}, end{0}
     {
     }
 
-    TokenPosition(Position start, Position end) : start{start}, end{end}
+    Range(Position start, Position end) : start{start}, end{end}
     {
     }
 
-    bool operator==(const TokenPosition &other) const
+    bool operator==(const Range &other) const
     {
         return start == other.start && end == other.end;
     }
-    bool operator!=(const TokenPosition &other) const
+    bool operator!=(const Range &other) const
     {
         return !operator==(other);
     }
@@ -200,7 +220,7 @@ struct TokenPosition
 struct Token : public Parsing::SyntaxNode
 {
     TokenType type;
-    TokenPosition position;
+    Range position;
     std::string raw;
     union
     {
@@ -216,11 +236,11 @@ struct Token : public Parsing::SyntaxNode
     {
     }
 
-    Token(TokenType type, TokenPosition position) : type{type}, position{position}, raw{""}, ivalue{0}
+    Token(TokenType type, Range position) : type{type}, position{position}, raw{""}, ivalue{0}
     {
     }
 
-    Token(TokenType type, TokenPosition position, std::string raw) : type{type}, position{position}, raw{raw}, ivalue{0}
+    Token(TokenType type, Range position, std::string raw) : type{type}, position{position}, raw{raw}, ivalue{0}
     {
         switch (type)
         {
@@ -278,7 +298,17 @@ struct Token : public Parsing::SyntaxNode
 
     const virtual SyntaxNode &operator[](int index) const override
     {
-        assert(false && "Shouldn't be called!");
+        return *this;
+    }
+
+    virtual const Position &GetStart() const override
+    {
+        return position.start;
+    }
+
+    virtual const Position &GetEnd() const override
+    {
+        return position.end;
     }
 };
 
@@ -410,6 +440,11 @@ public:
     }
 
     operator ValueType &()
+    {
+        return *token;
+    }
+
+    operator const ValueType &() const
     {
         return *token;
     }

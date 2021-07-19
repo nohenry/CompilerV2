@@ -25,14 +25,18 @@ const TokenList &Tokenizer::Tokenize()
     Logging::Log("    {} {}", color::bold(color::green("Compiling")), filePath);
 
     char c = fptr++;
-
+    int i = 0;
     do
     {
-        if (c == ' ' || c == '\n' || c == '\r')
-            c = fptr++;
 
         fptr--;
         Token current = TokenNull;
+        if (c == ' ' || c == '\n' || c == '\r')
+        {
+            c = fptr++;
+            current = TokenDisregard;
+            goto DONE_TRYING;
+        }
         TryDisregard(Comment());
         Try(IterateTrie());
         Try(Identifier());
@@ -43,10 +47,7 @@ const TokenList &Tokenizer::Tokenize()
         if (current != TokenNull)
         {
             if (current != TokenDisregard)
-            {
                 tokenList.add(current);
-                // std::cout << current << std::endl;
-            }
         }
         else if (*fptr)
         {
@@ -55,6 +56,7 @@ const TokenList &Tokenizer::Tokenize()
             fptr++;
         }
         c = fptr++;
+        i++;
     } while (!fptr.End());
     this->tokenList.add(TokenNull);
     return this->tokenList;
@@ -80,7 +82,7 @@ Tokenizer::IterateType Tokenizer::IterateTrieRec(const TrieNode &node, bool use,
     {
         auto str = std::string(TokenTypeString(node.GetType()));
         str[0] = tolower(str[0]);
-        Token token(node.GetType(), TokenPosition(startPosition, pos), str);
+        Token token(node.GetType(), Range(startPosition, pos), str);
         return std::make_tuple(token, static_cast<uint8_t>(s + 1));
     }
 
@@ -147,7 +149,7 @@ Tokenizer::IterateType Tokenizer::Integer()
                 if (isxdigit(c) || c == '_')
                     fptr++;
             }
-            Token token(TokenType::HexInt, TokenPosition(pos, fptr.CalulatePosition()), str);
+            Token token(TokenType::HexInt, Range(pos, fptr.CalulatePosition()), str);
             return std::make_tuple(token, 0);
         }
         case 'q':
@@ -160,7 +162,7 @@ Tokenizer::IterateType Tokenizer::Integer()
                 if ((c >= '0' && c <= '7') || c == '_')
                     fptr++;
             }
-            Token token(TokenType::OctInt, TokenPosition(pos, fptr.CalulatePosition()), str);
+            Token token(TokenType::OctInt, Range(pos, fptr.CalulatePosition()), str);
             return std::make_tuple(token, 0);
         }
         case 'b':
@@ -173,7 +175,7 @@ Tokenizer::IterateType Tokenizer::Integer()
                 if ((c >= '0' && c <= '1') || c == '_')
                     fptr++;
             }
-            Token token(TokenType::BinInt, TokenPosition(pos, fptr.CalulatePosition()), str);
+            Token token(TokenType::BinInt, Range(pos, fptr.CalulatePosition()), str);
             return std::make_tuple(token, 0);
         }
         }
@@ -187,10 +189,10 @@ Tokenizer::IterateType Tokenizer::Integer()
             c = fptr++;
         }
         fptr--;
-        Token token(TokenType::Integer, TokenPosition(pos, fptr.CalulatePosition()), str);
+        Token token(TokenType::Integer, Range(pos, fptr.CalulatePosition()), str);
         if (CheckPrimitiveTypeSize(token))
         {
-            return std::make_tuple(TokenNull, 0);
+            return std::make_tuple(TokenDisregard, 0);
         }
         return std::make_tuple(token, 0);
     }
@@ -227,7 +229,7 @@ Tokenizer::IterateType Tokenizer::Float()
                 else
                 {
                     fptr--;
-                    Token token(TokenType::Floating, TokenPosition(pos, fptr.CalulatePosition()), str);
+                    Token token(TokenType::Floating, Range(pos, fptr.CalulatePosition()), str);
                     return std::make_tuple(token, 0);
                 }
             }
@@ -241,7 +243,7 @@ Tokenizer::IterateType Tokenizer::Float()
                     if (!(isdigit(c) || c == '-'))
                     {
                         Logging::Error(color::bold(color::white("expected at least one digit in exponent")));
-                        Logging::CharacterSnippet(fptr, TokenPosition(pos, (fptr - 1).CalulatePosition()));
+                        Logging::CharacterSnippet(fptr, Range(pos, (fptr - 1).CalulatePosition()));
                         return std::make_tuple(TokenNull, 0);
                     }
                     else
@@ -253,7 +255,7 @@ Tokenizer::IterateType Tokenizer::Float()
                 else
                 {
                     fptr--;
-                    Token token(TokenType::Floating, TokenPosition(pos, fptr.CalulatePosition()), str);
+                    Token token(TokenType::Floating, Range(pos, fptr.CalulatePosition()), str);
                     return std::make_tuple(token, 0);
                 }
             }
@@ -261,14 +263,14 @@ Tokenizer::IterateType Tokenizer::Float()
         fptr--;
         if (!decimal && !exponent)
         {
-            Token token(TokenType::Integer, TokenPosition(pos, fptr.CalulatePosition()), str);
+            Token token(TokenType::Integer, Range(pos, fptr.CalulatePosition()), str);
             if (CheckPrimitiveTypeSize(token))
             {
-                return std::make_tuple(TokenNull, 0);
+                return std::make_tuple(TokenDisregard, 0);
             }
             return std::make_tuple(token, 0);
         }
-        Token token(TokenType::Floating, TokenPosition(pos, fptr.CalulatePosition()), str);
+        Token token(TokenType::Floating, Range(pos, fptr.CalulatePosition()), str);
         return std::make_tuple(token, 0);
     }
     else
@@ -302,7 +304,7 @@ Tokenizer::IterateType Tokenizer::String()
     case '"':
     case '\'':
     {
-        Token token(TokenType::String, TokenPosition(pos, fptr.CalulatePosition()));
+        Token token(TokenType::String, Range(pos, fptr.CalulatePosition()));
         c = fptr++;
         do
         {

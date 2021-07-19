@@ -175,7 +175,7 @@ public:
         std::cerr << color::bold(color::red("^")) << std::endl;
     }
 
-    static void CharacterSnippet(const FileIterator &file, const TokenPosition position)
+    static void CharacterSnippet(const FileIterator &file, const Range position)
     {
         uint32_t len;
         char *line = file.FindLine(position.start.line, len);

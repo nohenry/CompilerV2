@@ -6,7 +6,7 @@
 
 #include <Token.hpp>
 #include <Trie.hpp>
-#include <TrieStructure.inc>
+#include "TrieStructure.inc"
 
 const TokenType TokenTypeNull = TokenType::Eof;
 const Token TokenNull = Token();
@@ -122,6 +122,7 @@ const char *TokenTypeString(TokenType e)
         ets(Yield);
         ets(As);
         ets(Const);
+        ets(Action);
         ets(Eof);
     }
 #undef ets
@@ -226,6 +227,7 @@ std::ostream &operator<<(std::ostream &stream, const TokenType &e)
         ets(Yield);
         ets(As);
         ets(Const);
+        ets(Action);
         ets(Eof);
     }
 #undef ets

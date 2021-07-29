@@ -1,24 +1,13 @@
 {
-    "version": "2.0.0",
-    "command": "make",
-    "tasks": [
-        {
-            "label": "build",
-            "type": "process",
-            "args": ["all"],
-            "group": "build",
-            "presentation": {
-                "reveal": "silent"
-            },
-        },
-        {
-            "label": "clean",
-            "type": "process",
-            "args": ["clean"],
-            "group": "build",
-            "presentation": {
-                "reveal": "silent"
-            },
-        }
-    ]
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "build",
+			"type": "shell",
+			"options": {
+				"cwd": "${workspaceRoot}/build"
+			},
+			"command": "cmake --build .",
+		},
+	]
 }

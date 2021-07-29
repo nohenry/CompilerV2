@@ -137,7 +137,10 @@
         "xloctime": "cpp",
         "token.hpp": "c",
         "semaphore": "cpp",
-        "__bits": "cpp"
+        "__bits": "cpp",
+        "xlocbuf": "cpp",
+        "xlocmes": "cpp",
+        "*.rh": "cpp"
     },
     "git.ignoreLimitWarning": true
 }

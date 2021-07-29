@@ -20,15 +20,23 @@ namespace Parsing
         ObjectKeyValue,
         ObjectInitializer,
         TemplateInitializer,
+        ArrayLiteralExpressionEntry,
+        ArrayLiteralBoundaryEntry,
+        ArrayLiteral,
         BinaryExpression,
         UnaryExpression,
+        PostfixExpression,
         CallExpression,
+        SubscriptExpression,
         IdentifierExpression,
         CastExpression,
+        AnonymousFunctionExpression,
 
         GenericParameterEntry,
         GenericParameter,
 
+        ExpressionBodyStatement,
+        ExpressionBodySpecStatement,
         TemplateStatement,
         SpecStatement,
         BlockStatement,
@@ -36,18 +44,27 @@ namespace Parsing
         VariableDeclerationStatement,
         FunctionDeclerationStatement,
         IfStatement,
+        ElseStatement,
         LoopStatement,
         ReturnStatement,
         YieldStatement,
         ActionBaseStatement,
         ActionSpecStatement,
+        EnumStatement,
+        EnumIdentifierStatement,
+        TypeAliasStatement,
+        MatchEntry,
+        MatchExpression,
 
         PrimitiveType,
         IdentifierType,
+        ArrayType,
         FunctionType,
         ReferenceType,
         TypeExpression,
         GenericType,
+
+        ExportDecleration,
     };
 
     class SyntaxNode
@@ -72,6 +89,7 @@ namespace Parsing
 enum class TokenType
 {
     Eof,
+    Newline,
     Disregard,
     Whitespace, // space, newline
     Semicolon,  // ;
@@ -82,52 +100,55 @@ enum class TokenType
     Floating, // Floating point value
     String,   // String literal
 
-    Plus,              // +
-    DoublePlus,        // ++
-    PlusEqual,         // +=
-    Minus,             // -
-    DoubleMinus,       // --
-    MinusEqual,        // -=
-    Star,              // *
-    StarEqual,         // *=
-    ForwardSlash,      // /
-    SlashEqual,        // /=
-    LeftParen,         // (
-    RightParen,        // )
-    LeftCurly,         // {
-    RightCurly,        // }
-    LeftAngle,         // <
-    RightAngle,        // >
-    LeftSquare,        // [
-    RightSquare,       // ]
-    BiggerEqual,       // >=
-    SmallerEqual,      // <=
-    NotBigger,         // !>
-    NotSmaller,        // !<
-    Comma,             // ,
-    Equal,             // =
-    DoubleEqual,       // ==
-    NotEqual,          // !=
-    Dot,               // .
-    Ampersand,         // &
-    AmpersandEquals,   // &=
-    Percent,           // %,
-    PercentEqual,      // %=
-    At,                // @
-    Colon,             // :
-    LeftShift,         // <<
-    RightShift,        // >>
-    TripleShift,       // >>>
-    LeftShiftEquals,   // <<=
-    RightShiftEquals,  // >>=
-    TripleShiftEquals, // >>>=
-    Tilda,             // ~
-    Carrot,            // ^
-    CarrotEquals,      // ^=
-    Pipe,              // |
-    PipeEquals,        // |=
-    Not,               // !
-    FuncArrow,         // =>
+    Plus,                   // +
+    DoublePlus,             // ++
+    PlusEqual,              // +=
+    Minus,                  // -
+    DoubleMinus,            // --
+    MinusEqual,             // -=
+    Star,                   // *
+    StarEqual,              // *=
+    ForwardSlash,           // /
+    SlashEqual,             // /=
+    LeftParen,              // (
+    RightParen,             // )
+    LeftCurly,              // {
+    RightCurly,             // }
+    LeftAngle,              // <
+    RightAngle,             // >
+    LeftSquare,             // [
+    RightSquare,            // ]
+    BiggerEqual,            // >=
+    SmallerEqual,           // <=
+    NotBigger,              // !>
+    NotSmaller,             // !<
+    Comma,                  // ,
+    Equal,                  // =
+    DoubleEqual,            // ==
+    NotEqual,               // !=
+    Dot,                    // .
+    Spread,                 // ..
+    Ampersand,              // &
+    AmpersandEquals,        // &=
+    Percent,                // %,
+    PercentEqual,           // %=
+    At,                     // @
+    Colon,                  // :
+    LeftShift,              // <<
+    RightShift,             // >>
+    TripleLeftShift,        // <<>
+    TripleRightShift,       // <>>
+    LeftShiftEquals,        // <<=
+    RightShiftEquals,       // >>=
+    TripleLeftShiftEquals,  // <<>=
+    TripleRightShiftEquals, // <>>=
+    Tilda,                  // ~
+    Carrot,                 // ^
+    CarrotEquals,           // ^=
+    Pipe,                   // |
+    PipeEquals,             // |=
+    Not,                    // !
+    FuncArrow,              // =>
 
     /*
      *   Keywords
@@ -135,7 +156,7 @@ enum class TokenType
 
     Typeof,   // sizeof
     Asm,      // asm
-    Branch,   // branch
+    Match,    // match
     When,     // when
     In,       // in
     If,       // if
@@ -166,6 +187,7 @@ enum class TokenType
     As,       // as
     Const,    // const
     Action,   // action
+    Enum,     // enum
 
     Identifier,
 
@@ -740,6 +762,16 @@ public:
     const iterator end() const
     {
         return iterator(tokens + tok_size);
+    }
+
+    const Token &front() const
+    {
+        return *tokens;
+    }
+
+    const Token &back() const
+    {
+        return tokens[tok_size - 1];
     }
 
     const uint32_t size() const { return tok_size; }

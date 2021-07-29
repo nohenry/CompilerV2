@@ -27,16 +27,16 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/dsl.exe",
+            "program": "${workspaceFolder}/build/CompilerV2.exe",
             "preLaunchTask": "build",
             "args": [],
             "stopAtEntry": false,
             "environment": [],
-            "externalConsole": true,
+            "console": "externalTerminal",
             "logging": {
                 "moduleLoad": false,
-                "trace": true
-            }
+                "trace": true,
+            },
         }
         // {
         //     "name": "Debug Project",

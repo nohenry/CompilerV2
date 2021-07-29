@@ -34,6 +34,7 @@ const char *TokenTypeString(TokenType e)
     switch (e)
     {
         ets(Whitespace);
+        ets(Newline);
         ets(Disregard);
         ets(Semicolon);
         ets(Integer);
@@ -77,10 +78,12 @@ const char *TokenTypeString(TokenType e)
         ets(Colon);
         ets(LeftShift);
         ets(RightShift);
-        ets(TripleShift);
+        ets(TripleLeftShift);
+        ets(TripleRightShift);
         ets(LeftShiftEquals);
         ets(RightShiftEquals);
-        ets(TripleShiftEquals);
+        ets(TripleLeftShiftEquals);
+        ets(TripleRightShiftEquals);
         ets(Tilda);
         ets(Carrot);
         ets(CarrotEquals);
@@ -90,7 +93,7 @@ const char *TokenTypeString(TokenType e)
         ets(FuncArrow);
         ets(Typeof);
         ets(Asm);
-        ets(Branch);
+        ets(Match);
         ets(When);
         ets(In);
         ets(If);
@@ -123,6 +126,8 @@ const char *TokenTypeString(TokenType e)
         ets(As);
         ets(Const);
         ets(Action);
+        ets(Spread);
+        ets(Enum);
         ets(Eof);
     }
 #undef ets
@@ -139,6 +144,7 @@ std::ostream &operator<<(std::ostream &stream, const TokenType &e)
     switch (e)
     {
         ets(Whitespace);
+        ets(Newline);
         ets(Disregard);
         ets(Semicolon);
         ets(Integer);
@@ -182,10 +188,12 @@ std::ostream &operator<<(std::ostream &stream, const TokenType &e)
         ets(Colon);
         ets(LeftShift);
         ets(RightShift);
-        ets(TripleShift);
+        ets(TripleLeftShift);
+        ets(TripleRightShift);
         ets(LeftShiftEquals);
         ets(RightShiftEquals);
-        ets(TripleShiftEquals);
+        ets(TripleLeftShiftEquals);
+        ets(TripleRightShiftEquals);
         ets(Tilda);
         ets(Carrot);
         ets(CarrotEquals);
@@ -195,7 +203,7 @@ std::ostream &operator<<(std::ostream &stream, const TokenType &e)
         ets(FuncArrow);
         ets(Typeof);
         ets(Asm);
-        ets(Branch);
+        ets(Match);
         ets(When);
         ets(In);
         ets(If);
@@ -228,6 +236,8 @@ std::ostream &operator<<(std::ostream &stream, const TokenType &e)
         ets(As);
         ets(Const);
         ets(Action);
+        ets(Spread);
+        ets(Enum);
         ets(Eof);
     }
 #undef ets

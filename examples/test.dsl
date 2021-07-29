@@ -3,8 +3,8 @@
 /*
     Example of a multiline documentation comment
 
-    @param parameters the function takes
-    @return the return value of the function
+    @param parameters the const takes
+    @return the return value of the const
 
     # Feel free to using `markup` styling in this comment
 */
@@ -14,11 +14,11 @@ import std.os.*; // Example of importing directly into current module's namespac
 import std.fs; // Example of importing into current module's namespace but through the 'fs' namespace
 
 spec Open {
-    function Open();
+    const Open();
 }
 
 spec Close {
-    function Close();
+    const Close();
 }
 
 template Window {
@@ -27,33 +27,32 @@ template Window {
 }
 
 action Window {
-    function DoSomething() => {
+    const DoSomething() => {
 
     }
 }
 
 action Close in Window {
-    function Close() => {
+    const Close() => {
 
     }
 }
 
 
-function value() => uint {
+const value() => uint {
     return 50;
 }
 
-function main() => {
+const main() => {
     uint foo = 3; // Example of an unsigned integer variable
     let uint bar = 5; // Example of a constant unsigned integer variable
 
-    branch foo {
-        when 0: println("Zero");
-        when 1: println("One");
-        when 2: println("Two");
-        when 3: println("Three");
-    } else {
-        println("Larger than three!");
+    let x = branch foo {
+        0 => println("Zero");
+        1 => println("One");
+        2 => println("Two");
+        3 => println("Three");
+        else =>  println("Larger than three!");
     }
 
     if bar == 5 {
@@ -65,7 +64,7 @@ function main() => {
                                           // The non constant reference could be used to change the value of foo when the constant reference thinks foo shouldn't change
                                           // This is an error the compiler will catch
     
-    loop x in [0-5] {
+    loop x in [0...5] {
         println("Loop range");
     }
 
@@ -78,8 +77,8 @@ function main() => {
     loop; // infinite loop
 }
 
-function <T> GenericFunction(T &param) => {
-    println("Generic function type {}", typeof(T).name);
+const <T> Genericconst(T &param) => {
+    println("Generic const type {}", typeof(T).name);
 }
 
 template <T> GenericTemplate {
@@ -88,7 +87,7 @@ template <T> GenericTemplate {
 }
 
 action <T> GenericTemplate<T> {
-    function GenericTemplateAction(T &value) => {
+    const GenericTemplateAction(T &value) => {
         println("Generic Template action type {}", typeof(T).name);
     }
 }
@@ -98,30 +97,30 @@ template <T: Open> GenericTemplateConstraint {
     T fieldB;
 }
 
-function <T: Open & Close> GenericConstraint(T &param) => {
+const <T: Open & Close> GenericConstraint(T &param) => {
     param.Open();
     param.Close();
 }
 
 /* ------------------------- Tags: ---------------------------
    Tags are a very useful way of specifying useful metadata or
-   custom information to the compiler about the module, function, or template.
+   custom information to the compiler about the module, const, or template.
 
    They can also be used as preprocessor defines as well as macros.
 */
 
 [http.Get('/index.html')]
-function IndexRoute() => {
+const IndexRoute() => {
 
 }
 
 if [platform.Windows] {
-    function WindowsSpecific() => {
+    const WindowsSpecific() => {
 
     }
 }
 
-function RepeatTag => {
+const RepeatTag => {
     [actions.Repeat([0-5])] => { // Repeat code in the brackets for the specified range
         int v{i} = i;
     }

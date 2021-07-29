@@ -1,14 +1,23 @@
 #pragma once
 
-#include <Log.hpp>
 #include <stdint.h>
-#include <Token.hpp>
 #include <cassert>
 #include <memory>
 #include <string>
 #include <vector>
+#include <bitset>
 
-// extern FileIterator *globalFptr;
+#include <Log.hpp>
+#include <Token.hpp>
+#include <Trie.hpp>
+#include <Errors.hpp>
+// #include <ModuleUnit.hpp>
+
+#include <llvm/IR/Value.h>
+
+struct CodeValue;
+class CodeGeneration;
+class ModuleUnit;
 
 namespace Parsing
 {
@@ -16,6 +25,7 @@ namespace Parsing
     {
     public:
         virtual ~ExpressionSyntax() {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const = 0;
     };
 
     using Expression = ExpressionSyntax *;
@@ -124,6 +134,62 @@ namespace Parsing
         }
 
         const auto &GetToken() const { return token; }
+    };
+
+    class ArrayType : public TypeSyntax
+    {
+    private:
+        const Token &open;
+        TypeSyntax *type;
+        const Token &colon;
+        Expression size;
+        const Token &close;
+
+    public:
+        ArrayType(const Token &open,
+                  TypeSyntax *type,
+                  const Token &colon,
+                  Expression size,
+                  const Token &close) : open{open}, type{type}, colon{colon}, size{size}, close{close} {}
+        ArrayType(const Token &open,
+                  TypeSyntax *type,
+                  const Token &close) : open{open}, type{type}, colon{TokenNull}, size{nullptr}, close{close} {}
+        virtual ~ArrayType() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::ArrayType; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 1 + (colon == TokenNull ? 0 : 1);
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                return *type;
+            case 1:
+                return *size;
+            }
+            return *this;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return open.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return close.GetEnd();
+        }
+
+        const auto &GetOpen() const { return open; }
+        const auto &GetArrayType() const { return *type; }
+        const auto &GetColon() const { return colon; }
+        const auto &GetArraySize() const { return *size; }
+        const auto &GetClose() const { return close; }
     };
 
     class FunctionType : public TypeSyntax
@@ -290,6 +356,8 @@ namespace Parsing
             return valueToken.GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
         const uint64_t GetValue() const { return valueToken.ivalue; }
         const std::string &GetRawValue() const { return valueToken.raw; }
     };
@@ -306,7 +374,7 @@ namespace Parsing
         }
         virtual ~FloatingSyntax() {}
 
-        virtual const SyntaxType GetType() const override { return SyntaxType::Integer; }
+        virtual const SyntaxType GetType() const override { return SyntaxType::Floating; }
 
         virtual const uint8_t NumChildren() const override
         {
@@ -327,6 +395,8 @@ namespace Parsing
         {
             return valueToken.GetEnd();
         }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const double GetValue() const { return valueToken.fvalue; }
         const std::string &GetRawValue() const { return valueToken.raw; }
@@ -367,6 +437,8 @@ namespace Parsing
             return boolToken.GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
         const auto &GetBoolToken() const { return boolToken; }
         const auto &GetValue() const { return value; }
     };
@@ -404,6 +476,8 @@ namespace Parsing
         {
             return token.GetEnd();
         }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetToken() const { return token; }
         const auto &GetValue() const { return token.raw; }
@@ -486,6 +560,8 @@ namespace Parsing
             return right.GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
         const auto &GetLeft() const { return left; }
         const auto &GetValues() const { return values; }
         const auto &GetRight() const { return right; }
@@ -525,8 +601,148 @@ namespace Parsing
             return body->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
         const auto &GetIdentifier() const { return identifier; }
         const auto &GetBody() const { return *body; }
+    };
+
+    class ArrayLiteralEntry : public SyntaxNode
+    {
+    public:
+        virtual ~ArrayLiteralEntry() {}
+        virtual const ExpressionSyntax &GetExpression() const = 0;
+    };
+
+    class ArrayLiteralExpressionEntry : public ArrayLiteralEntry
+    {
+    private:
+        Expression expression;
+
+    public:
+        ArrayLiteralExpressionEntry(Expression expression) : expression{expression}
+        {
+        }
+        virtual ~ArrayLiteralExpressionEntry() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::ArrayLiteralExpressionEntry; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 1;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            return *expression;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return expression->GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return expression->GetEnd();
+        }
+
+        // virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
+        const ExpressionSyntax &GetExpression() const override { return *expression; }
+    };
+
+    class ArrayLiteralBoundaryEntry : public ArrayLiteralEntry
+    {
+    private:
+        Expression expression;
+        const Token &colon;
+        Expression boundary;
+
+    public:
+        ArrayLiteralBoundaryEntry(Expression expression,
+                                  const Token &colon,
+                                  Expression boundary) : expression{expression}, colon{colon}, boundary{boundary}
+        {
+        }
+        virtual ~ArrayLiteralBoundaryEntry() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::ArrayLiteralBoundaryEntry; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 2;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                return *expression;
+            case 1:
+                return *boundary;
+            }
+            return *this;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return expression->GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return expression->GetEnd();
+        }
+
+        // virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
+        const ExpressionSyntax &GetExpression() const override { return *expression; }
+        const auto &GetColon() const { return colon; }
+        const auto &GetBoundary() const { return *boundary; }
+    };
+
+    class ArrayLiteral : public ExpressionSyntax
+    {
+    private:
+        const Token &left;
+        std::vector<ArrayLiteralEntry *> values;
+        const Token &right;
+
+    public:
+        ArrayLiteral(const Token &left, const std::vector<ArrayLiteralEntry *> &values, const Token &right) : left{left}, values{values}, right{right}
+        {
+        }
+        virtual ~ArrayLiteral() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::ArrayLiteral; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return values.size();
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            return *values[index];
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return left.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return right.GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
+        const auto &GetLeft() const { return left; }
+        const auto &GetValues() const { return values; }
+        const auto &GetRight() const { return right; }
     };
 
     class BinaryExpression : public ExpressionSyntax
@@ -570,6 +786,8 @@ namespace Parsing
         {
             return RHS->GetEnd();
         }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetLHS() const { return *LHS; }
         const auto &GetRHS() const { return *RHS; }
@@ -615,6 +833,53 @@ namespace Parsing
             return expression->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
+        const auto &GetExpression() const { return *expression; }
+        const auto &GetOperator() const { return op; }
+    };
+
+    class PostfixExpression : public ExpressionSyntax
+    {
+    private:
+        Expression expression;
+        const Token &op;
+
+    public:
+        PostfixExpression(Expression expression, const Token &op) : expression{expression}, op{op}
+        {
+        }
+        virtual ~PostfixExpression() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::PostfixExpression; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 1;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                return *expression;
+            }
+            return *this;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return op.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return expression->GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
         const auto &GetExpression() const { return *expression; }
         const auto &GetOperator() const { return op; }
     };
@@ -650,20 +915,22 @@ namespace Parsing
             return identifierToken.GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
         const auto &GetIdentiferToken() const { return identifierToken; }
     };
 
     class CallExpression : public ExpressionSyntax
     {
     private:
-        const Token &functionName;
+        Expression fn;
         const Token &leftParen;
         const Token &rightParen;
         std::vector<Expression> arguments;
 
     public:
-        CallExpression(const Token &functionName, const Token &leftParen,
-                       const Token &rightParen, std::vector<Expression> arguments) : functionName{functionName}, leftParen{leftParen}, rightParen{rightParen}, arguments{arguments}
+        CallExpression(Expression fn, const Token &leftParen,
+                       const Token &rightParen, std::vector<Expression> arguments) : fn{fn}, leftParen{leftParen}, rightParen{rightParen}, arguments{arguments}
         {
         }
         virtual ~CallExpression() {}
@@ -672,17 +939,23 @@ namespace Parsing
 
         virtual const uint8_t NumChildren() const override
         {
-            return arguments.size();
+            return arguments.size() + 1;
         }
 
         virtual const SyntaxNode &operator[](int index) const override
         {
-            return *arguments[index];
+            switch (index)
+            {
+            case 0:
+                return *fn;
+            default:
+                return *arguments[index - 1];
+            }
         }
 
         virtual const Position &GetStart() const override
         {
-            return functionName.GetStart();
+            return fn->GetStart();
         }
 
         virtual const Position &GetEnd() const override
@@ -690,9 +963,63 @@ namespace Parsing
             return arguments.back()->GetEnd();
         }
 
-        const auto &GetFunctionNameToken() const { return functionName; }
-        const auto &GetFunctionName() const { return functionName.raw; }
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
+        const auto &GetFunctionExpression() const { return *fn; }
         const auto &GetFunctionArgs() const { return arguments; }
+    };
+
+    class SubscriptExpression : public ExpressionSyntax
+    {
+    private:
+        Expression expr;
+        const Token &left;
+        Expression subsr;
+        const Token &right;
+
+    public:
+        SubscriptExpression(Expression expr,
+                            const Token &left,
+                            Expression subsr,
+                            const Token &right) : expr{expr}, left{left}, subsr{subsr}, right{right}
+        {
+        }
+        virtual ~SubscriptExpression() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::SubscriptExpression; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 2;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                return *expr;
+            default:
+                return *subsr;
+            }
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return expr->GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return right.GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
+        const auto &GetExpression() const { return *expr; }
+        const auto &GetLeft() const { return left; }
+        const auto &GetSubscript() const { return *subsr; }
+        const auto &GetRight() const { return right; }
     };
 
     class CastExpression : public ExpressionSyntax
@@ -738,6 +1065,8 @@ namespace Parsing
             return type->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
         const auto &GetExpression() const { return *LHS; }
         const auto &GetKeyword() const { return keyword; }
         const auto &GetCastType() const { return *type; }
@@ -747,6 +1076,7 @@ namespace Parsing
     {
     public:
         virtual ~StatementSyntax() {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const = 0;
     };
 
     using Statement = StatementSyntax *;
@@ -828,30 +1158,31 @@ namespace Parsing
         const auto &GetRight() const { return right; }
     };
 
-    class TemplateStatement : public StatementSyntax
+    class ExpressionBodyStatement : public StatementSyntax
     {
     private:
-        const Token &keyword;
-        const Token &identifier;
-        GenericParameter *generic;
-        const Token &open;
-        std::vector<Statement> statements;
-        const Token &close;
+        const Token &getArrow;
+        Statement get;
+        const Token &setArrow;
+        Statement set;
 
     public:
-        TemplateStatement(const Token &keyword,
-                          const Token &identifier,
-                          GenericParameter *generic,
-                          const Token &open,
-                          const std::vector<Statement> &statements,
-                          const Token &close) : keyword{keyword}, identifier{identifier}, generic{generic}, open{open}, statements{statements}, close{close} {}
-        virtual ~TemplateStatement() {}
+        ExpressionBodyStatement(const Token &getArrow,
+                                Statement get,
+                                const Token &setArrow,
+                                Statement set) : getArrow{getArrow}, get{get}, setArrow{setArrow}, set{set} {}
+        ExpressionBodyStatement(const Token &getArrow,
+                                const Token &setArrow,
+                                Statement set) : getArrow{getArrow}, get{nullptr}, setArrow{setArrow}, set{set} {}
+        ExpressionBodyStatement(const Token &getArrow,
+                                Statement get) : getArrow{getArrow}, get{get}, setArrow{TokenNull}, set{nullptr} {}
+        virtual ~ExpressionBodyStatement() {}
 
-        virtual const SyntaxType GetType() const override { return SyntaxType::TemplateStatement; }
+        virtual const SyntaxType GetType() const override { return SyntaxType::ExpressionBodyStatement; }
 
         virtual const uint8_t NumChildren() const override
         {
-            return statements.size() + generic == nullptr ? 0 : 1;
+            return (get == nullptr ? 0 : 1) + (set == nullptr ? 0 : 1);
         }
 
         virtual const SyntaxNode &operator[](int index) const override
@@ -859,109 +1190,100 @@ namespace Parsing
             switch (index)
             {
             case 0:
-                if (generic)
-                    return *generic;
+                if (get)
+                    return *get;
                 else
-                    return *statements[index];
+                    return *set;
             default:
-                if (generic)
-                    return *statements[index - 1];
-                else
-                    return *statements[index];
-                break;
+                return *set;
             }
         }
 
         virtual const Position &GetStart() const override
         {
-            return keyword.GetStart();
+            return getArrow.GetStart();
         }
 
         virtual const Position &GetEnd() const override
         {
-            return close.GetStart();
+            if (set)
+            {
+                return set->GetStart();
+            }
+            else
+            {
+                return get->GetStart();
+            }
         }
 
-        const auto &GetKeyword() const { return keyword; }
-        const auto &GetIdentifier() const { return identifier; }
-        const auto &GetGeneric() const { return *generic; }
-        const auto &GetOpen() const { return open; }
-        const auto &GetStatements() const { return statements; }
-        const auto &GetClose() const { return close; }
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetGetArrow() const { return getArrow; }
+        const auto &GetGetStatement() const { return *get; }
+        const auto &GetSetArrow() const { return setArrow; }
+        const auto &GetSetStatement() const { return *set; }
     };
 
-    class SpecStatement : public StatementSyntax
+    class ExpressionBodySpecStatement : public StatementSyntax
     {
     private:
-        const Token &keyword;
-        const Token &identifier;
-        GenericParameter *generic;
-        const Token &open;
-        std::vector<Statement> statements;
-        const Token &close;
+        const Token &left;
+        const Token &get;
+        const Token &set;
+        const Token &right;
+        bool hasGet;
+        bool hasSet;
 
     public:
-        SpecStatement(const Token &keyword,
-                      const Token &identifier,
-                      GenericParameter *generic,
-                      const Token &open,
-                      const std::vector<Statement> &statements,
-                      const Token &close) : keyword{keyword}, identifier{identifier}, generic{generic}, open{open}, statements{statements}, close{close} {}
-        virtual ~SpecStatement() {}
+        ExpressionBodySpecStatement(const Token &left,
+                                    const Token &get,
+                                    const Token &set,
+                                    const Token &right) : left{left}, get{get}, set{set}, right{right}, hasGet{get != TokenNull}, hasSet{set != TokenNull} {}
+        virtual ~ExpressionBodySpecStatement() {}
 
-        virtual const SyntaxType GetType() const override { return SyntaxType::SpecStatement; }
+        virtual const SyntaxType GetType() const override { return SyntaxType::ExpressionBodySpecStatement; }
 
         virtual const uint8_t NumChildren() const override
         {
-            return statements.size() + generic == nullptr ? 0 : 1;
+            return 0;
         }
 
         virtual const SyntaxNode &operator[](int index) const override
         {
-            switch (index)
-            {
-            case 0:
-                if (generic)
-                    return *generic;
-                else
-                    return *statements[index];
-            default:
-                if (generic)
-                    return *statements[index - 1];
-                else
-                    return *statements[index];
-                break;
-            }
+            return get;
         }
 
         virtual const Position &GetStart() const override
         {
-            return keyword.GetStart();
+            return left.GetStart();
         }
 
         virtual const Position &GetEnd() const override
         {
-            return close.GetStart();
+            return right.GetEnd();
         }
 
-        const auto &GetKeyword() const { return keyword; }
-        const auto &GetIdentifier() const { return identifier; }
-        const auto &GetGeneric() const { return *generic; }
-        const auto &GetOpen() const { return open; }
-        const auto &GetStatements() const { return statements; }
-        const auto &GetClose() const { return close; }
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetLeft() const { return left; }
+        const auto &GetGet() const { return get; }
+        const auto &GetSet() const { return set; }
+        const auto &GetRight() const { return right; }
+        const bool HasGet() const { return hasGet; }
+        const bool HasSet() const { return hasSet; }
     };
 
+    template <typename T = Statement>
     class BlockStatement : public StatementSyntax
     {
     private:
         const Token &open;
-        std::vector<Statement> statements;
+        std::vector<T> statements;
         const Token &close;
 
     public:
         BlockStatement(const Token &open,
-                       const std::vector<Statement> &statements,
+                       const std::vector<T> &statements,
                        const Token &close) : open{open}, statements{statements}, close{close} {}
         virtual ~BlockStatement() {}
 
@@ -987,9 +1309,145 @@ namespace Parsing
             return close.GetStart();
         }
 
+        virtual CodeValue *CodeGen(CodeGeneration &gen) const override
+        {
+            if (gen.IsUsed(CodeGeneration::Using::NoBlock))
+                gen.UnUse(CodeGeneration::Using::NoBlock);
+            else
+                gen.NewScope<ScopeNode>();
+                
+            CodeValue *ret = nullptr;
+            for (auto s : statements)
+                ret = (CodeValue *)s->CodeGen(gen);
+
+            if (!gen.IsUsed(CodeGeneration::Using::NoBlock))
+                gen.LastScope();
+            return ret;
+        }
+
         const auto &GetOpen() const { return open; }
         const auto &GetStatements() const { return statements; }
         const auto &GetClose() const { return close; }
+    };
+
+    class TemplateStatement : public StatementSyntax
+    {
+    private:
+        const Token &keyword;
+        const Token &identifier;
+        GenericParameter *generic;
+        // const Token &open;
+        // std::vector<Statement> statements;
+        // const Token &close;
+        BlockStatement<> *body;
+
+    public:
+        TemplateStatement(const Token &keyword,
+                          const Token &identifier,
+                          GenericParameter *generic,
+                          const Token &open,
+                          const std::vector<Statement> &statements,
+                          const Token &close) : keyword{keyword}, identifier{identifier}, generic{generic}, body{new BlockStatement(open, statements, close)} {}
+        virtual ~TemplateStatement() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::TemplateStatement; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 1 + (generic == nullptr ? 0 : 1);
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                if (generic)
+                    return *generic;
+                else
+                    return *body;
+            default:
+                return *body;
+                break;
+            }
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return keyword.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return body->GetStart();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetKeyword() const { return keyword; }
+        const auto &GetIdentifier() const { return identifier; }
+        const auto &GetGeneric() const { return *generic; }
+        const auto &GetBody() const { return *body; }
+    };
+
+    class SpecStatement : public StatementSyntax
+    {
+    private:
+        const Token &keyword;
+        const Token &identifier;
+        GenericParameter *generic;
+        // const Token &open;
+        // std::vector<Statement> statements;
+        // const Token &close;
+        BlockStatement<> *body;
+
+    public:
+        SpecStatement(const Token &keyword,
+                      const Token &identifier,
+                      GenericParameter *generic,
+                      const Token &open,
+                      const std::vector<Statement> &statements,
+                      const Token &close) : keyword{keyword}, identifier{identifier}, generic{generic}, body{new BlockStatement(open, statements, close)} {}
+        virtual ~SpecStatement() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::SpecStatement; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 1 + generic == nullptr ? 0 : 1;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                if (generic)
+                    return *generic;
+                else
+                    return *body;
+            default:
+                return *body;
+                break;
+            }
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return keyword.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return body->GetStart();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetKeyword() const { return keyword; }
+        const auto &GetIdentifier() const { return identifier; }
+        const auto &GetGeneric() const { return *generic; }
+        const auto &GetBody() const { return *body; }
     };
 
     class ExpressionStatement : public StatementSyntax
@@ -1022,6 +1480,8 @@ namespace Parsing
         {
             return expression->GetEnd();
         }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
     };
 
     class VariableDeclerationStatement : public StatementSyntax
@@ -1031,32 +1491,47 @@ namespace Parsing
         const Token &identifier;
         TypeSyntax *type;
         Expression initializer;
+        ExpressionBodyStatement *expressionBody;
+        ExpressionBodySpecStatement *specExpressionBody;
 
     public:
         VariableDeclerationStatement(const Token &keyword,
                                      const Token &identifier,
-                                     TypeSyntax *type = nullptr, Expression initializer = nullptr) : keyword{keyword}, identifier{identifier}, type{type}, initializer{initializer} {}
+                                     TypeSyntax *type = nullptr,
+                                     Expression initializer = nullptr) : keyword{keyword}, identifier{identifier}, type{type}, initializer{initializer}, expressionBody{nullptr}, specExpressionBody{nullptr} {}
+        VariableDeclerationStatement(const Token &keyword,
+                                     const Token &identifier,
+                                     ExpressionBodyStatement *expressionBody,
+                                     TypeSyntax *type = nullptr) : keyword{keyword}, identifier{identifier}, type{type}, initializer{nullptr}, expressionBody{expressionBody}, specExpressionBody{nullptr} {}
+        VariableDeclerationStatement(const Token &keyword,
+                                     const Token &identifier,
+                                     ExpressionBodySpecStatement *specExpressionBody,
+                                     TypeSyntax *type) : keyword{keyword}, identifier{identifier}, type{type}, initializer{nullptr}, expressionBody{nullptr}, specExpressionBody{specExpressionBody} {}
         virtual ~VariableDeclerationStatement() {}
 
         virtual const SyntaxType GetType() const override { return SyntaxType::VariableDeclerationStatement; }
 
         virtual const uint8_t NumChildren() const override
         {
-            return (type == nullptr ? 0 : 1) + (initializer == nullptr ? 0 : 1);
+            return (type == nullptr ? 0 : 1) + (initializer == nullptr ? 0 : 1) + (expressionBody == nullptr ? 0 : 1) + (specExpressionBody == nullptr ? 0 : 1);
         }
 
-        virtual const SyntaxNode &operator[](int index) const override
+        virtual const SyntaxNode &operator[](int inindex) const override
         {
-            switch (index)
-            {
-            case 0:
-                if (type)
-                    return *type;
-                else
-                    return *initializer;
-            case 1:
+            int index = 0;
+            int tIndex = type == nullptr ? -1 : index++;
+            int iIndex = initializer == nullptr ? -1 : index++;
+            int eIndex = expressionBody == nullptr ? -1 : index++;
+            int sIndex = specExpressionBody == nullptr ? -1 : index++;
+
+            if (inindex == tIndex)
+                return *type;
+            else if (inindex == iIndex)
                 return *initializer;
-            }
+            else if (inindex == eIndex)
+                return *expressionBody;
+            else if (inindex == sIndex)
+                return *specExpressionBody;
             return *this;
         }
 
@@ -1070,9 +1545,14 @@ namespace Parsing
             return initializer->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
         const auto GetVariableType() const { return type; }
+        const auto &GetInitializer() const { return *initializer; }
+        const auto &GetExpressionBody() const { return *expressionBody; }
+        const auto &GetSpecExpressionBody() const { return *specExpressionBody; }
         bool HasInitializer() const { return initializer != nullptr; }
     };
 
@@ -1096,9 +1576,9 @@ namespace Parsing
                                      const Token &left,
                                      const std::vector<VariableDeclerationStatement *> &parameters,
                                      const Token &right,
-                                     const Token &arrow,
-                                     TypeSyntax *retType,
-                                     Statement body) : keyword{keyword}, identifier{identifier}, generic{generic}, left{left}, parameters{parameters}, right{right}, arrow{arrow}, retType{retType}, body{body} {}
+                                     const Token &arrow = TokenNull,
+                                     TypeSyntax *retType = nullptr,
+                                     Statement body = nullptr) : keyword{keyword}, identifier{identifier}, generic{generic}, left{left}, parameters{parameters}, right{right}, arrow{arrow}, retType{retType}, body{body} {}
         virtual ~FunctionDeclerationStatement() {}
 
         virtual const SyntaxType GetType() const override { return SyntaxType::FunctionDeclerationStatement; }
@@ -1119,7 +1599,7 @@ namespace Parsing
 
             if (inindex == gIndex)
                 return *generic;
-            else if (inindex >= pIndex && inindex < rIndex)
+            else if (inindex >= pIndex && (inindex < pIndex + parameters.size()))
                 return *parameters[inindex - pIndex];
             else if (inindex == rIndex)
                 return *retType;
@@ -1138,6 +1618,8 @@ namespace Parsing
             return body->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
         const auto &GetGeneric() const { return *generic; }
@@ -1147,6 +1629,113 @@ namespace Parsing
         const auto &GetFuncArrow() const { return arrow; }
         const auto &GetRetType() const { return retType; }
         const auto &GetBody() const { return body; }
+        const bool IsPrototype() const { return body == nullptr; }
+    };
+
+    class AnonymousFunctionExpression : public ExpressionSyntax
+    {
+    private:
+        const Token &left;
+        std::vector<VariableDeclerationStatement *> parameters;
+        const Token &right;
+        const Token &arrow;
+        TypeSyntax *retType;
+        Statement body;
+
+    public:
+        AnonymousFunctionExpression(const Token &left,
+                                    std::vector<VariableDeclerationStatement *> parameters,
+                                    const Token &right,
+                                    const Token &arrow,
+                                    TypeSyntax *retType,
+                                    Statement body) : left{left}, parameters{parameters}, right{right}, arrow{arrow}, retType{retType}, body{body}
+        {
+        }
+        virtual ~AnonymousFunctionExpression() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::AnonymousFunctionExpression; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return parameters.size() + (body == nullptr ? 0 : 1) + (retType == nullptr ? 0 : 1);
+        }
+
+        virtual const SyntaxNode &operator[](int inindex) const override
+        {
+            int index = 0;
+            int pIndex = parameters.empty() ? -1 : index;
+            index += parameters.size();
+            int rIndex = retType == nullptr ? -1 : index++;
+            int bIndex = body == nullptr ? -1 : index++;
+
+            if (inindex >= pIndex && inindex < rIndex)
+                return *parameters[inindex - pIndex];
+            else if (inindex == rIndex)
+                return *retType;
+            else if (inindex == bIndex)
+                return *body;
+            return *this;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return left.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return body->GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetLeftParen() const { return left; }
+        const auto &GetParameters() const { return parameters; }
+        const auto &GetRightParen() const { return right; }
+        const auto &GetFuncArrow() const { return arrow; }
+        const auto &GetRetType() const { return retType; }
+        const auto &GetBody() const { return body; }
+    };
+
+    class ElseStatement : public StatementSyntax
+    {
+    private:
+        const Token &keyword;
+        Statement body;
+
+    public:
+        ElseStatement(const Token &keyword,
+                      Statement body) : keyword{keyword}, body{body}
+        {
+        }
+        virtual ~ElseStatement() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::ElseStatement; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 1;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            return *body;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return keyword.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return body->GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetKeyword() const { return keyword; }
+        const auto &GetBody() const { return *body; }
     };
 
     class IfStatement : public StatementSyntax
@@ -1155,18 +1744,20 @@ namespace Parsing
         const Token &keyword;
         Expression expression;
         Statement body;
+        ElseStatement *elseClause;
 
     public:
         IfStatement(const Token &keyword,
                     Expression expression,
-                    Statement body) : keyword{keyword}, expression{expression}, body{body} {}
+                    Statement body,
+                    ElseStatement *elseClause = nullptr) : keyword{keyword}, expression{expression}, body{body}, elseClause{elseClause} {}
         virtual ~IfStatement() {}
 
         virtual const SyntaxType GetType() const override { return SyntaxType::IfStatement; }
 
         virtual const uint8_t NumChildren() const override
         {
-            return 2;
+            return 2 + (elseClause == nullptr ? 0 : 1);
         }
 
         virtual const SyntaxNode &operator[](int index) const override
@@ -1177,6 +1768,9 @@ namespace Parsing
                 return *expression;
             case 1:
                 return *body;
+            case 2:
+                if (elseClause)
+                    return *elseClause;
             }
             return *this;
         }
@@ -1191,9 +1785,12 @@ namespace Parsing
             return body->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
         const auto &GetBody() const { return *body; }
+        const auto &GetElse() const { return *elseClause; }
     };
 
     class LoopStatement : public StatementSyntax
@@ -1238,6 +1835,8 @@ namespace Parsing
             return body->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
         const auto &GetBody() const { return *body; }
@@ -1276,6 +1875,8 @@ namespace Parsing
             return expression->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
     };
@@ -1313,6 +1914,8 @@ namespace Parsing
             return expression->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
     };
@@ -1322,12 +1925,12 @@ namespace Parsing
     private:
         const Token &keyword;
         TypeSyntax *templateType;
-        BlockStatement *body;
+        BlockStatement<> *body;
 
     public:
         ActionBaseStatement(const Token &keyword,
                             TypeSyntax *templateType,
-                            BlockStatement *body) : keyword{keyword}, templateType{templateType}, body{body} {}
+                            BlockStatement<> *body) : keyword{keyword}, templateType{templateType}, body{body} {}
         virtual ~ActionBaseStatement() {}
 
         virtual const SyntaxType GetType() const override { return SyntaxType::ActionBaseStatement; }
@@ -1359,6 +1962,8 @@ namespace Parsing
             return body->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
         const auto &GetKeyword() const { return keyword; }
         const auto &GetTemplateType() const { return *templateType; }
         const auto &GetBody() const { return *body; }
@@ -1371,14 +1976,14 @@ namespace Parsing
         TypeSyntax *specType;
         const Token &in;
         TypeSyntax *templateType;
-        BlockStatement *body;
+        BlockStatement<> *body;
 
     public:
         ActionSpecStatement(const Token &keyword,
                             TypeSyntax *specType,
                             const Token &in,
                             TypeSyntax *templateType,
-                            BlockStatement *body) : keyword{keyword}, specType{specType}, in{in}, templateType{templateType}, body{body} {}
+                            BlockStatement<> *body) : keyword{keyword}, specType{specType}, in{in}, templateType{templateType}, body{body} {}
         virtual ~ActionSpecStatement() {}
 
         virtual const SyntaxType GetType() const override { return SyntaxType::ActionSpecStatement; }
@@ -1412,6 +2017,8 @@ namespace Parsing
             return body->GetEnd();
         }
 
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
         const auto &GetKeyword() const { return keyword; }
         const auto &GetSpecType() const { return *specType; }
         const auto &GetInKeyword() const { return in; }
@@ -1419,31 +2026,319 @@ namespace Parsing
         const auto &GetBody() const { return *body; }
     };
 
-    class ModuleUnit
+    class EnumIdentifierStatement : public StatementSyntax
     {
     private:
-        BlockStatement syntaxTree;
+        const Token &identifier;
 
     public:
-        ModuleUnit(const Token &start, const std::vector<Statement> statements, const Token &eof) : syntaxTree{start, statements, eof} {}
+        EnumIdentifierStatement(const Token &identifier) : identifier{identifier} {}
+        virtual ~EnumIdentifierStatement() {}
 
-        const auto &GetSyntaxTree() const { return syntaxTree; }
+        virtual const SyntaxType GetType() const override { return SyntaxType::EnumIdentifierStatement; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 0;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            return *this;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return identifier.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return identifier.GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetIdentifier() const { return identifier; }
+    };
+
+    class EnumStatement : public StatementSyntax
+    {
+    private:
+        const Token &keyword;
+        const Token &identifier;
+        BlockStatement<EnumIdentifierStatement *> *body;
+
+    public:
+        EnumStatement(const Token &keyword,
+                      const Token &identifier,
+                      BlockStatement<EnumIdentifierStatement *> *body) : keyword{keyword}, identifier{identifier}, body{body} {}
+        EnumStatement(const Token &keyword,
+                      const Token &identifier,
+                      const Token &left,
+                      const std::vector<EnumIdentifierStatement *> &statements,
+                      const Token &right) : keyword{keyword}, identifier{identifier}, body{new BlockStatement(left, statements, right)} {}
+        virtual ~EnumStatement() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::EnumStatement; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 1;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            return *body;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return keyword.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return body->GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetKeyword() const { return keyword; }
+        const auto &GetIdentifier() const { return identifier; }
+        const auto &GetBody() const { return *body; }
+    };
+
+    class TypeAliasStatement : public StatementSyntax
+    {
+    private:
+        const Token &keyword;
+        const Token &identifier;
+        GenericParameter *generic;
+        const Token &eq;
+        TypeSyntax *type;
+
+    public:
+        TypeAliasStatement(const Token &keyword,
+                           const Token &identifier,
+                           GenericParameter *generic,
+                           const Token &eq,
+                           TypeSyntax *type) : keyword{keyword}, identifier{identifier}, generic{generic}, eq{eq}, type{type} {}
+        TypeAliasStatement(const Token &keyword,
+                           const Token &identifier,
+                           GenericParameter *generic) : keyword{keyword}, identifier{identifier}, generic{generic}, eq{TokenNull}, type{nullptr} {}
+        virtual ~TypeAliasStatement() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::TypeAliasStatement; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return (generic == nullptr ? 0 : 1) + (type == nullptr ? 0 : 1);
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                if (generic)
+                    return *generic;
+            default:
+                return *type;
+            }
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return keyword.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            if (type)
+                return type->GetEnd();
+            else if (generic)
+                return generic->GetEnd();
+            else
+                return identifier.GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetKeyword() const { return keyword; }
+        const auto &GetIdentifier() const { return identifier; }
+        const auto &GetGeneric() const { return *generic; }
+        const auto &GetEq() const { return eq; }
+        const auto &GetTypeAlias() const { return *type; }
+        const bool IsSpecAlias() const { return type == nullptr; }
+    };
+
+    class MatchEntry : public SyntaxNode
+    {
+    private:
+        Expression expr;
+        const Token &arrow;
+        Statement stmt;
+
+    public:
+        MatchEntry(Expression expr,
+                   const Token &arrow,
+                   Statement stmt) : expr{expr}, arrow{arrow}, stmt{stmt}
+        {
+        }
+        virtual ~MatchEntry() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::MatchEntry; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return expr == nullptr ? 1 : 2;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                if (expr)
+                    return *expr;
+            default:
+                return *stmt;
+            }
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return expr->GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return stmt->GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const {}
+
+        const auto &GetExpression() const { return *expr; }
+        const auto &GetArrow() const { return arrow; }
+        const auto &GetSatement() const { return *stmt; }
+        const bool IsElse() const { return expr == nullptr; }
+    };
+
+    class MatchExpression : public ExpressionSyntax
+    {
+    private:
+        const Token &keyword;
+        Expression expr;
+        BlockStatement<MatchEntry *> *entries;
+
+    public:
+        MatchExpression(const Token &keyword,
+                        Expression expr,
+                        BlockStatement<MatchEntry *> *entries) : keyword{keyword}, expr{expr}, entries{entries}
+        {
+        }
+        virtual ~MatchExpression() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::MatchExpression; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 2;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            switch (index)
+            {
+            case 0:
+                return *expr;
+            default:
+                return *entries;
+            }
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return keyword.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return entries->GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+
+        const auto &GetKeyword() const { return keyword; }
+        const auto &GetExpression() const { return *expr; }
+        const auto &GetEntries() const { return *entries; }
+    };
+
+    class ExportDecleration : public StatementSyntax
+    {
+    private:
+        const Token &keyword;
+        Statement statement;
+
+    public:
+        ExportDecleration(const Token &keyword,
+                          Statement statement) : keyword{keyword}, statement{statement}
+        {
+        }
+        virtual ~ExportDecleration() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::ExportDecleration; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 1;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            return *statement;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return statement->GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return statement->GetEnd();
+        }
+
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+
+        const auto &GetKeyword() const { return keyword; }
+        const auto &GetStatement() const { return *statement; }
     };
 
     class Parser
     {
     private:
+        enum class Using
+        {
+            If,
+        };
+
+    private:
         const TokenList &tokenList;
         const FileIterator &fptr;
         TokenList::iterator tokenIterator;
+        bool keepGoing = true;
+        std::bitset<64> usings;
 
+        static ErrorList errors;
         static FileIterator *globalFptr;
 
     public:
         Parser(const TokenList &tokenList, const FileIterator &fptr) : tokenList{tokenList}, fptr{fptr}, tokenIterator{nullptr} { globalFptr = (FileIterator *)&fptr; }
         ~Parser() {}
 
-        ModuleUnit *ParseModule();
+        ModuleUnit *ParseModule(const std::string &moduleName);
 
         Statement ParseStatement();
         Statement ParseTopLevelScopeStatement();
@@ -1452,33 +2347,48 @@ namespace Parsing
         Statement ParseSpec();
         Statement ParseSpecScopeStatement();
         Statement ParseBlockStatement();
+        Statement ParseTemplateVariableDecleration();
+        Statement ParseActionExpressionBody();
+        Statement ParseSpecVariableDecleration();
         Statement ParseVariableDecleration();
         Statement ParseConst();
         Statement ParseConstVariableDecleration(const Token &keyword, const Token &ident);
         Statement ParseFunctionDecleration(const Token &keyword, const Token &ident);
         Statement ParseSpecFunctionDecleration(const Token &keyword, const Token &ident);
         Statement ParseIfStatement();
+        Statement ParseElif();
         Statement ParseLoopStatement();
         Statement ParseReturnStatement();
         Statement ParseYieldStatement();
         Statement ParseAction();
         Statement ParseActionBody();
         Statement ParseActionScopeStatement();
+        Statement ParseEnum();
+        Statement ParseTypeAlias();
+        Statement ParseSpecTypeAlias();
+        Statement ParseExport();
 
         GenericParameter *ParseGenericParameter();
         GenericParameterEntry *ParseGenericParameterEntry();
         ObjectInitializer *ParseObjectInitializer();
+        ArrayLiteralEntry *ParseArrayLiteralEntry();
+        MatchEntry *ParseMatchEntry();
 
         Expression ParseExpression(uint8_t parentPrecedence = 0, Expression left = nullptr);
         Expression ParsePrimaryExpression();
         Expression ParseLiteral();
         Expression ParseIdentifier();
-        Expression ParseFunctionCall(const Token &);
+        Expression ParseFunctionCall(Expression fn);
+        Expression ParseAnonymousFunction();
+        Expression ParseSubscript(Expression expr);
         Expression ParseTemplateInitializer(const Token &);
+        Expression ParseArrayLiteral();
+        Expression ParseMatch();
 
         TypeSyntax *ParseType();
 
         uint8_t UnaryPrecedence(TokenType type);
+        uint8_t PostfixPrecedence(TokenType type);
         uint8_t BinaryPrecedence(TokenType type);
         bool IsBinaryRightAssociative(TokenType type);
         const Token &Expect(TokenType type);
@@ -1486,6 +2396,11 @@ namespace Parsing
         void RecurseNode(const SyntaxNode &node);
 
         static auto &GetFptr() { return *globalFptr; }
+        static auto &GetErrorList() { return errors; }
+
+        void Use(Using toUse) { usings.set((uint64_t)toUse); }
+        bool IsUsed(Using toUse) { return usings.test((uint64_t)toUse); }
+        void UnUse(Using toUnUse) { usings.reset((uint64_t)toUnUse); }
     };
 } // namespace Parsing
 

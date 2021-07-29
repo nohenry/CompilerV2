@@ -204,6 +204,10 @@ char *get_token_type(char *in)
     {
         return "Dot";
     }
+    else if (strcmp(in, "..") == 0)
+    {
+        return "Spread";
+    }
     else if (strcmp(in, "&") == 0)
     {
         return "Ampersand";
@@ -236,9 +240,13 @@ char *get_token_type(char *in)
     {
         return "RightShift";
     }
-    else if (strcmp(in, ">>>") == 0)
+    else if (strcmp(in, "<<>") == 0)
     {
-        return "TripleShift";
+        return "TripleLeftShift";
+    }
+    else if (strcmp(in, "<>>") == 0)
+    {
+        return "TripleRightShift";
     }
     else if (strcmp(in, "<<=") == 0)
     {
@@ -248,9 +256,13 @@ char *get_token_type(char *in)
     {
         return "RightShiftEquals";
     }
-    else if (strcmp(in, ">>>=") == 0)
+    else if (strcmp(in, "<<>=") == 0)
     {
-        return "TripleShiftEquals";
+        return "TripleLeftShiftEquals";
+    }
+    else if (strcmp(in, "<>>=") == 0)
+    {
+        return "TripleRightShiftEquals";
     }
     else if (strcmp(in, "~") == 0)
     {

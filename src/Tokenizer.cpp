@@ -33,6 +33,13 @@ const TokenList &Tokenizer::Tokenize()
         Token current = TokenNull;
         if (c == ' ' || c == '\n' || c == '\r')
         {
+            if (c == '\n' || c == '\r' && tokenList.back().type != TokenType::Newline)
+            {
+                auto start = tokenList.back().position.end;
+                auto end = start;
+                end.character++;
+                tokenList.add(Token(TokenType::Newline, Range(start, end)));
+            }
             c = fptr++;
             current = TokenDisregard;
             goto DONE_TRYING;
@@ -270,6 +277,12 @@ Tokenizer::IterateType Tokenizer::Float()
             }
             return std::make_tuple(token, 0);
         }
+        else if (decimal && c == '.')
+        {
+            fptr--;
+            Token token(TokenType::Integer, Range(pos, fptr.CalulatePosition()), str.substr(0, str.size() - 1));
+            return std::make_tuple(token, 0);
+        }
         Token token(TokenType::Floating, Range(pos, fptr.CalulatePosition()), str);
         return std::make_tuple(token, 0);
     }
@@ -346,6 +359,14 @@ bool Tokenizer::Comment()
             return true;
         }
         }
+    }
+    case '#':
+    {
+        while (fptr != '\n' && fptr != '\r')
+        {
+            fptr++;
+        }
+        return true;
     }
     }
     fptr--;

@@ -214,4 +214,52 @@ public:
         }
         std::cerr << std::endl;
     }
+
+    static void SampleSnippet(const FileIterator &file, const Range editPosition, const std::string &insert)
+    {
+        uint32_t len;
+        char *line = file.FindLine(editPosition.start.line, len);
+
+        uint32_t lineN = editPosition.start.line;
+        uint32_t nDigits = 0;
+
+        do
+        {
+            nDigits++;
+            lineN /= 10;
+        } while (lineN);
+
+        std::cerr << color::bold(color::green("  --> ")) << file.GetFilename() << std::endl;
+
+        for (size_t i = 0; i < nDigits + 1; i++)
+            std::cerr << " ";
+        std::cerr << color::bold(color::green("|")) << std::endl;
+
+        std::string fullLine(line, len);
+
+        auto first = fullLine.substr(0, editPosition.start.character);
+        auto second = fullLine.substr(editPosition.end.character);
+
+        auto newline = first + insert + second;
+
+        std::cerr << Colors::stylize(96) << Colors::stylize(1)
+                  << std::left << std::setw(nDigits + 1) << (editPosition.start.line + 1)
+                  << color::bold(color::green("| "))
+                  << newline
+                  << std::endl;
+
+        for (size_t i = 0; i < nDigits + 1; i++)
+            std::cerr << " ";
+
+        std::cerr << color::bold(color::green("| "));
+        // for (size_t i = 0; i < position.character; i++)
+        // {
+        //     std::cerr << " ";
+        // }
+        // for (size_t i = position.start.character; i < position.end.character; i++)
+        // {
+        //     std::cerr << color::bold(color::red("^"));
+        // }
+        std::cerr << std::endl;
+    }
 };

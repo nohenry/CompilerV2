@@ -9,7 +9,7 @@
 #include <string>
 #include <bitset>
 
-std::string gen_random(const int len);
+// std::string gen_random(const int len);
 // #include <Parser.hpp>
 namespace Parsing
 {
@@ -34,6 +34,40 @@ struct CodeValue
     CodeValue(llvm::Value *value, CodeType *type) : value{value}, type{type}
     {
     }
+};
+
+struct FunctionCodeValue : public CodeValue
+{
+private:
+    llvm::AllocaInst *retLoc;
+    llvm::BasicBlock *retLabel;
+    int numRets = 0;
+
+public:
+    llvm::Value *lastStoreValue = nullptr;
+    llvm::StoreInst *lastStore = nullptr;
+    llvm::BranchInst *lastbr = nullptr;
+
+public:
+    FunctionCodeValue(llvm::Value *value, CodeType *type, llvm::AllocaInst *retLoc = nullptr, llvm::BasicBlock *retLabel = nullptr) : CodeValue(value, type), retLoc{retLoc}, retLabel{retLabel}
+    {
+    }
+
+    llvm::Function *Function()
+    {
+        return static_cast<llvm::Function *>(value);
+    }
+
+    llvm::Function *Function() const
+    {
+        return static_cast<llvm::Function *>(value);
+    }
+
+    auto GetReturnLocation() { return retLoc; }
+    void SetReturnLocation(llvm::AllocaInst *ret) { retLoc = ret; }
+    auto GetNumRets() { return numRets; }
+    auto GetReturnLabel() { return retLabel; }
+    void IncNumRets() { numRets++; }
 };
 
 class CodeGeneration;
@@ -98,6 +132,10 @@ public:
     template <IsSymbolNode T, typename... Args>
     T *AddChild(std::string symbolName, Args... args)
     {
+        if (findSymbol(symbolName) != children.end())
+        {
+            // TODO throw error symbol already exists
+        }
         auto child = new T(this, args...);
         children.insert(std::pair<std::string, SymbolNode *>(symbolName, child));
         return child;
@@ -106,10 +144,11 @@ public:
     std::string GenerateName()
     {
         std::string s;
+        uint64_t scope;
         do
         {
             s = "$";
-            s += gen_random(5);
+            s += std::to_string(scope++);
         } while (findSymbol(s) != children.end());
         return s;
     }
@@ -177,11 +216,18 @@ public:
 class TemplateNode : public SymbolNode
 {
 private:
+    llvm::StructType *templ;
+    std::vector<llvm::Type *> members;
+
 public:
-    TemplateNode(SymbolNode *parent) : SymbolNode{parent} {}
+    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{templ} {}
     virtual ~TemplateNode() {}
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::TemplateNode; }
+
+    const auto GetTemplate() const { return templ; }
+    void AddMember(llvm::Type *val) { members.push_back(val); }
+    auto GetMembers() { return members; }
 };
 
 class TypeAliasNode : public SymbolNode
@@ -213,7 +259,8 @@ public:
     enum class Using
     {
         Export,
-        NoBlock
+        NoBlock,
+        Reference
     };
 
 public:
@@ -225,7 +272,8 @@ private:
     llvm::Module *module;
 
     SymbolNode *insertPoint = nullptr;
-    CodeValue *currentFunction;
+    FunctionCodeValue *currentFunction;
+    CodeValue *currentVar;
 
     std::bitset<64> usings;
 
@@ -247,17 +295,17 @@ public:
 
     // Creates a new scope and sets the insert point for new symbols
     template <IsSymbolNode T, typename... Args>
-    auto NewScope(std::string name, Args... args)
+    T *NewScope(std::string name, Args... args)
     {
-        return (insertPoint = insertPoint->AddChild<T>(name, args...));
+        return static_cast<T *>((insertPoint = insertPoint->AddChild<T>(name, args...)));
     }
 
     // Same as previous function but generators symbol name
     template <IsSymbolNode T, typename... Args>
-    auto NewScope()
+    T *NewScope()
     {
         auto name = insertPoint->GenerateName();
-        return (insertPoint = insertPoint->AddChild<T>(name));
+        return static_cast<T *>((insertPoint = insertPoint->AddChild<T>(name)));
     }
 
     // Clean up a scope
@@ -289,14 +337,25 @@ public:
         return currentFunction;
     }
 
-    void SetCurrentFunction(CodeValue *func)
+    void SetCurrentFunction(FunctionCodeValue *func)
     {
         currentFunction = func;
     }
 
-    llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type, const std::string &VarName)
+    const auto GetCurrentVar() const
     {
-        auto func = static_cast<llvm::Function *>(currentFunction->value);
+        return currentVar;
+    }
+
+    void SetCurrentVar(CodeValue *var)
+    {
+        currentVar = var;
+    }
+
+    llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type, const std::string &VarName, llvm::Function *func = nullptr)
+    {
+        if (!func)
+            func = static_cast<llvm::Function *>(currentFunction->value);
         llvm::IRBuilder<> TmpB(&func->getEntryBlock(), func->getEntryBlock().begin());
         return TmpB.CreateAlloca(type, nullptr, VarName);
     }
@@ -312,6 +371,17 @@ public:
         }
         s = "_ZN10" + s;
         return s;
+    }
+
+    void Return(llvm::Value *val)
+    {
+        if (currentFunction && currentFunction->GetReturnLocation())
+        {
+            currentFunction->lastStoreValue = val;
+            currentFunction->lastStore = builder.CreateStore(val, currentFunction->GetReturnLocation());
+            currentFunction->lastbr = builder.CreateBr(currentFunction->GetReturnLabel());
+            currentFunction->IncNumRets();
+        }
     }
 
     void Use(Using toUse) { usings.set((uint64_t)toUse); }

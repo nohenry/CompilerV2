@@ -13,23 +13,23 @@
 #endif
 #include <codecvt>
 
-std::string gen_random(const int len)
-{
-    std::string tmp_s;
-    static const char alphanum[] =
-        "0123456789"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "abcdefghijklmnopqrstuvwxyz";
+// std::string gen_random(const int len)
+// {
+//     std::string tmp_s;
+//     static const char alphanum[] =
+//         "0123456789"
+//         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+//         "abcdefghijklmnopqrstuvwxyz";
 
-    srand((unsigned)time(NULL));
+//     srand((unsigned)time(NULL));
 
-    tmp_s.reserve(len);
+//     tmp_s.reserve(len);
 
-    for (int i = 0; i < len; ++i)
-        tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
+//     for (int i = 0; i < len; ++i)
+//         tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
 
-    return tmp_s;
-}
+//     return tmp_s;
+// }
 
 using namespace Parsing;
 
@@ -174,6 +174,14 @@ const CodeValue *CodeGeneration::Cast(const CodeValue *value, CodeType *toType, 
     return nullptr;
 }
 
+// llvm::Value *LoadIfAlloca(llvm::Value *value)
+// {
+//     if (value->getValueID() == llvm::Instruction::Alloca + llvm::Value::InstructionVal && initializer->GetType() == Parsing::SyntaxType::IdentifierExpression) // If the initializer is a variable, load it and store it
+//     {
+//         auto load = new CodeValue(gen.GetBuilder().CreateLoad(init->value), init->type);
+//     }
+// }
+
 uint8_t CodeGeneration::GetNumBits(uint64_t val)
 {
     if (val <= UINT8_MAX)
@@ -190,80 +198,143 @@ namespace Parsing
 {
     const CodeValue *VariableDeclerationStatement::CodeGen(CodeGeneration &gen) const
     {
-        auto init = initializer ? initializer->CodeGen(gen) : nullptr;
-        CodeType *type = nullptr;
-        if (initializer && !this->type)
-            type = init->type;
-        else if (this->type)
-            type = gen.TypeType(*this->type); // Get type value from type annotation
+        if (initializer && initializer->GetType() == SyntaxType::TemplateInitializer)
+        {
+            auto symbol = gen.GetInsertPoint()->findSymbol(initializer->As<TemplateInitializer>().GetIdentifier().raw);
+            if (symbol != gen.GetInsertPoint()->GetChildren().end() && symbol->second->GetType() == SymbolNodeType::TemplateNode)
+            {
+                auto templ = symbol->second->As<TemplateNode>();
+                if (keyword.type == TokenType::Const) // Constant variable
+                {
+                }
+                else if (keyword.type == TokenType::Let)
+                {
+                    auto inst = gen.CreateEntryBlockAlloca(templ.GetTemplate(), identifier.raw); // Allocate the variable on the stack
+
+
+                    auto varValue = new CodeValue(inst, new CodeType(templ.GetTemplate()));
+                    gen.SetCurrentVar(varValue);
+
+                    initializer->CodeGen(gen);
+
+                    gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
+                    return varValue;
+                }
+            }
+            else
+            {
+                // TODO throw error cannot find symbol
+            }
+        }
         else
         {
-            // TODO throw error cannot determine type!
-        }
+            auto init = initializer ? initializer->CodeGen(gen) : nullptr;
+            CodeType *type = nullptr;
+            if (initializer && !this->type)
+                type = init->type;
+            else if (this->type)
+                type = gen.TypeType(*this->type); // Get type value from type annotation
+            else
+            {
+                // TODO throw error cannot determine type!
+            }
 
-        if (gen.GetInsertPoint()->GetType() == SymbolNodeType::ModuleNode)
-        {
-            if (keyword.type == TokenType::Const)
+            if (gen.GetInsertPoint()->GetType() == SymbolNodeType::ModuleNode) // In top level scope
             {
-                if (llvm::isa<llvm::Constant>(init->value))
+                if (keyword.type == TokenType::Const)
                 {
-                    auto global = new llvm::GlobalVariable(gen.GetModule(), type->type, true, gen.IsUsed(CodeGeneration::Using::Export) ? llvm::GlobalValue::LinkageTypes::ExternalLinkage : llvm::GlobalValue::LinkageTypes::PrivateLinkage, static_cast<llvm::Constant *>(init->value), gen.GenerateMangledName(identifier.raw));
-                    const llvm::DataLayout &DL = gen.GetModule().getDataLayout();
-                    llvm::Align AllocaAlign = DL.getPrefTypeAlign(type->type);
-                    global->setAlignment(AllocaAlign);
-                }
-                else
-                {
-                    // TODO throw error initilizaer of global is not constant
-                }
-            }
-            else if (keyword.type == TokenType::Let)
-            {
-                if (llvm::isa<llvm::Constant>(init->value))
-                {
-                    auto global = new llvm::GlobalVariable(gen.GetModule(), type->type, false, gen.IsUsed(CodeGeneration::Using::Export) ? llvm::GlobalValue::LinkageTypes::ExternalLinkage : llvm::GlobalValue::LinkageTypes::PrivateLinkage, static_cast<llvm::Constant *>(init->value), gen.GenerateMangledName(identifier.raw));
-                    const llvm::DataLayout &DL = gen.GetModule().getDataLayout();
-                    llvm::Align AllocaAlign = DL.getPrefTypeAlign(type->type);
-                    global->setAlignment(AllocaAlign);
-                }
-                else
-                {
-                    // TODO throw error initilizaer of global is not constant
-                }
-            }
-        }
-        else if (gen.GetInsertPoint()->GetType() == SymbolNodeType::FunctionNode)
-        {
-            if (keyword.type == TokenType::Const)
-            {
-                auto varValue = new CodeValue(type ? gen.Cast(init, type)->value : init->value, type);
-                gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue);
-                return varValue;
-            }
-            else if (keyword.type == TokenType::Let)
-            {
-                auto inst = gen.CreateEntryBlockAlloca(type->type, identifier.raw);
-
-                if (initializer)
-                {
-                    if (init->value->getValueID() == llvm::Instruction::Alloca + llvm::Value::InstructionVal && initializer->GetType() == Parsing::SyntaxType::IdentifierExpression)
+                    if (llvm::isa<llvm::Constant>(init->value))
                     {
-                        auto load = new CodeValue(gen.GetBuilder().CreateLoad(init->value), init->type);
-                        // value->type->type = load->getType();
-                        gen.GetBuilder().CreateStore(type ? gen.Cast(load, type)->value : init->value, inst);
-                        delete load;
+                        auto global = new llvm::GlobalVariable(gen.GetModule(), type->type, true, gen.IsUsed(CodeGeneration::Using::Export) ? llvm::GlobalValue::LinkageTypes::ExternalLinkage : llvm::GlobalValue::LinkageTypes::PrivateLinkage, static_cast<llvm::Constant *>(init->value), gen.GenerateMangledName(identifier.raw));
+                        const llvm::DataLayout &DL = gen.GetModule().getDataLayout();
+                        llvm::Align AllocaAlign = DL.getPrefTypeAlign(type->type);
+                        global->setAlignment(AllocaAlign);
+
+                        auto varValue = new CodeValue(global, type);
+                        gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue);
                     }
                     else
                     {
-                        gen.GetBuilder().CreateStore(type ? gen.Cast(init, type)->value : init->value, inst);
+                        // TODO throw error initilizaer of global is not constant
                     }
                 }
+                else if (keyword.type == TokenType::Let)
+                {
+                    if (llvm::isa<llvm::Constant>(init->value))
+                    {
+                        auto global = new llvm::GlobalVariable(gen.GetModule(), type->type, false, gen.IsUsed(CodeGeneration::Using::Export) ? llvm::GlobalValue::LinkageTypes::ExternalLinkage : llvm::GlobalValue::LinkageTypes::PrivateLinkage, static_cast<llvm::Constant *>(init->value), gen.GenerateMangledName(identifier.raw));
+                        const llvm::DataLayout &DL = gen.GetModule().getDataLayout();
+                        llvm::Align AllocaAlign = DL.getPrefTypeAlign(type->type);
+                        global->setAlignment(AllocaAlign);
 
-                auto varValue = new CodeValue(inst, type);
-                gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue);
-                return varValue;
+                        auto varValue = new CodeValue(global, type);
+                        gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue);
+                    }
+                    else
+                    {
+                        // TODO throw error initilizaer of global is not constant
+                    }
+                }
+            }
+            else if (gen.GetInsertPoint()->GetType() == SymbolNodeType::FunctionNode) // Local variables
+            {
+                if (keyword.type == TokenType::Const) // Constant variable
+                {
+                    if (init)
+                    {
+
+                        CodeValue *varValue;
+                        if (type) // If type is specified cast the value to the type
+                        {
+                            auto casted = gen.Cast(init, type);
+                            varValue = new CodeValue(casted->value, type);
+                            if (casted != init)
+                                delete casted;
+                        }
+                        else
+                            varValue = new CodeValue(init->value, type);
+
+                        gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
+                        return varValue;
+                    }
+                    else
+                    {
+                        // TODO throw error const must have initiliazer
+                    }
+                }
+                else if (keyword.type == TokenType::Let)
+                {
+                    auto inst = gen.CreateEntryBlockAlloca(type->type, identifier.raw); // Allocate the variable on the stack
+
+                    if (initializer)
+                    {
+
+                        if (type)
+                        {
+                            auto casted = gen.Cast(init, type);
+                            gen.GetBuilder().CreateStore(casted->value, inst);
+                            if (casted != init)
+                                delete casted;
+                        }
+                        else
+                            gen.GetBuilder().CreateStore(init->value, inst);
+                    }
+
+                    auto varValue = new CodeValue(inst, type);
+                    gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
+                    return varValue;
+                }
+            }
+            else if (gen.GetInsertPoint()->GetType() == SymbolNodeType::TemplateNode) // Template members
+            {
+                auto tn = gen.GetInsertPoint()->As<TemplateNode>();
+
+                tn.AddMember(type->type);
+
+                gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, new CodeValue(nullptr, type));
             }
         }
+
         return nullptr;
     }
 
@@ -683,7 +754,11 @@ namespace Parsing
 
     const CodeValue *UnaryExpression::CodeGen(CodeGeneration &gen) const
     {
+        if (op.type == TokenType::Ampersand)
+            gen.Use(CodeGeneration::Using::Reference);
         auto expr = expression->CodeGen(gen);
+        if (op.type == TokenType::Ampersand)
+            gen.UnUse(CodeGeneration::Using::Reference);
         auto ret = new CodeValue(nullptr, new CodeType(*expr->type));
         switch (op.type)
         {
@@ -812,10 +887,17 @@ namespace Parsing
             case SymbolNodeType::VariableNode:
             {
                 auto f = found->As<VariableNode>().GetVariable();
-                // auto load = gen.GetBuilder().CreateLoad(f->value);
-                // auto value = new CodeValue(load, f->type);
-                // value->type->type = load->getType();
-                return f;
+                if (gen.IsUsed(CodeGeneration::Using::Reference))
+                {
+                    return f;
+                }
+                else
+                {
+                    auto load = gen.GetBuilder().CreateLoad(f->value);
+                    auto value = new CodeValue(load, f->type);
+                    value->type->type = load->getType();
+                    return value;
+                }
             }
             case SymbolNodeType::FunctionNode:
             {
@@ -832,6 +914,35 @@ namespace Parsing
 
     const CodeValue *CallExpression::CodeGen(CodeGeneration &gen) const
     {
+        auto fnExpr = static_cast<const FunctionCodeValue *>(fn->CodeGen(gen));
+        if (fnExpr)
+        {
+            if (fnExpr->Function()->arg_size() != arguments.size())
+            {
+                // TODO throw error arguments don't match
+                return nullptr;
+            }
+            std::vector<llvm::Value *> args(arguments.size());
+            auto checkargs = fnExpr->Function()->args().begin();
+            for (auto v : arguments)
+            {
+                auto val = v->CodeGen(gen);
+                if (val->type->type == checkargs->getType())
+                {
+                    args.push_back(val->value);
+                }
+                else
+                {
+                    // TODO throw error arg type doesn't match!
+                }
+                checkargs++;
+                delete val;
+            }
+            auto call = gen.GetBuilder().CreateCall(fnExpr->Function(), args);
+            return new CodeValue(call, fnExpr->type);
+        }
+        // TODO throw error function callee is not function type!
+        return nullptr;
     }
 
     const CodeValue *SubscriptExpression::CodeGen(CodeGeneration &gen) const
@@ -903,9 +1014,10 @@ namespace Parsing
     const CodeValue *FunctionDeclerationStatement::CodeGen(CodeGeneration &gen) const
     {
         auto checkFunc = gen.GetModule().getFunction(identifier.raw);
+        CodeType *funcReturnType;
         if (!checkFunc)
         {
-            auto funcReturnType = retType == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*retType);
+            funcReturnType = (retType == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*retType));
             std::vector<llvm::Type *> parameters;
             for (auto p : this->parameters)
                 parameters.push_back(gen.TypeType(*p->GetVariableType())->type);
@@ -920,7 +1032,8 @@ namespace Parsing
             // TODO log error about function already existing
         }
 
-        auto fValue = new CodeValue(checkFunc, new CodeType(checkFunc->getType()));
+        auto retBlock = llvm::BasicBlock::Create(gen.GetContext());
+        auto fValue = new FunctionCodeValue(checkFunc, funcReturnType, nullptr, retBlock);
         gen.SetCurrentFunction(fValue);
 
         auto fnScope = gen.NewScope<FunctionNode>(identifier.raw, fValue);
@@ -930,12 +1043,61 @@ namespace Parsing
         auto insertPoint = llvm::BasicBlock::Create(gen.GetContext(), "entry", checkFunc);
         gen.GetBuilder().SetInsertPoint(insertPoint);
 
+        if (retType)
+        {
+            auto retval = gen.CreateEntryBlockAlloca(checkFunc->getFunctionType()->getReturnType(), "ret");
+            fValue->SetReturnLocation(retval);
+        }
+
         gen.Use(CodeGeneration::Using::NoBlock);
         const CodeValue *funcBody = body->CodeGen(gen);
 
         if (retType)
         {
-            // gen.GetBuilder().CreateRet()
+            if ((body->GetType() == SyntaxType::BlockStatement &&
+                 body->As<BlockStatement<>>().GetStatements().size() > 0 &&
+                 body->As<BlockStatement<>>().GetStatements().back()->GetType() == SyntaxType::ExpressionStatement) ||
+                body->GetType() == SyntaxType::ExpressionStatement)
+            {
+                auto type = gen.TypeType(*retType);
+                auto casted = gen.Cast(funcBody, type);
+                gen.Return(casted->value);
+                // gen.GetBuilder().CreateRet(casted->value);
+                if (casted != funcBody)
+                    delete casted;
+                delete type;
+            }
+
+            auto cfv = gen.GetCurrentFunction();
+            if (cfv->GetNumRets() == 1)
+            {
+                cfv->lastStore->eraseFromParent();
+                auto p = cfv->lastbr->getParent();
+
+                cfv->lastbr->eraseFromParent();
+
+                cfv->GetReturnLocation()->eraseFromParent();
+                gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(fValue->Function()->getFunctionType()->getReturnType()));
+                if (p->getValueID() == llvm::Value::BasicBlockVal)
+                    gen.GetBuilder().SetInsertPoint(p);
+                gen.GetBuilder().CreateRet(cfv->lastStoreValue);
+            }
+            else if (cfv->GetNumRets() >= 1)
+            {
+                if (gen.GetBuilder().GetInsertBlock()->getTerminator() == nullptr)
+                    gen.GetBuilder().CreateBr(retBlock);
+                checkFunc->getBasicBlockList().push_back(retBlock);
+                gen.GetBuilder().SetInsertPoint(retBlock);
+                auto load = gen.GetBuilder().CreateLoad(cfv->GetReturnLocation());
+                gen.GetBuilder().CreateRet(load);
+            }
+            else
+            {
+                // TODO throw error about empty return statement with non void function
+                cfv->GetReturnLocation()->eraseFromParent();
+                gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(fValue->Function()->getFunctionType()->getReturnType()));
+                return nullptr;
+            }
         }
         else
             gen.GetBuilder().CreateRetVoid();
@@ -957,6 +1119,133 @@ namespace Parsing
         gen.UnUse(CodeGeneration::Using::Export);
         return stGen;
     }
+
+    const CodeValue *ReturnStatement::CodeGen(CodeGeneration &gen) const
+    {
+        auto retType = static_cast<llvm::Function *>(gen.GetCurrentFunction()->value)->getFunctionType()->getReturnType();
+        if (retType->getTypeID() == llvm::Type::VoidTyID && expression != nullptr)
+        {
+            // TODO throw error returned value with a void function
+        }
+        else if (expression)
+        {
+            auto cgen = expression->CodeGen(gen);
+            auto hretType = new CodeType(retType);
+            auto expr = gen.Cast(cgen, hretType);
+            delete hretType;
+
+            gen.Return(expr->value);
+            return nullptr;
+            // auto ret = gen.GetBuilder().CreateRet(expr->value);
+            // auto val = new CodeValue(ret, new CodeType(ret->getType()));
+            // if (expr != cgen)
+            //     delete expr;
+            // if (llvm::isa<llvm::Constant>(cgen->value))
+            //     delete cgen;
+            // return val;
+        }
+        else
+        {
+            // TODO throw error about empty return statement with non void function
+
+            gen.Return(llvm::Constant::getNullValue(retType));
+            return nullptr;
+            // auto ret = gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(retType));
+            // auto val = new CodeValue(ret, new CodeType(ret->getType()));
+            // return val;
+        }
+    }
+
+    const CodeValue *IfStatement::CodeGen(CodeGeneration &gen) const
+    {
+        auto currentBlock = gen.GetBuilder().GetInsertBlock();
+        auto endBlock = llvm::BasicBlock::Create(gen.GetContext());
+        llvm::BasicBlock *ifBlock;
+        if (body->GetType() == SyntaxType::BlockStatement && body->As<BlockStatement<>>().GetStatements().size() == 0)
+            ifBlock = endBlock;
+        else
+        {
+            ifBlock = llvm::BasicBlock::Create(gen.GetContext(), "", gen.GetCurrentFunction()->Function());
+            gen.GetBuilder().SetInsertPoint(ifBlock);
+            body->CodeGen(gen);
+            if (ifBlock->getTerminator() == nullptr)
+                gen.GetBuilder().CreateBr(endBlock);
+            gen.GetBuilder().SetInsertPoint(currentBlock);
+        }
+
+        llvm::BasicBlock *elseBlock;
+        if (elseClause == nullptr || (elseClause->GetBody().GetType() == SyntaxType::BlockStatement && elseClause->GetBody().As<BlockStatement<>>().GetStatements().size() == 0))
+            elseBlock = endBlock;
+        else
+        {
+            elseBlock = llvm::BasicBlock::Create(gen.GetContext(), "", gen.GetCurrentFunction()->Function());
+            gen.GetBuilder().SetInsertPoint(elseBlock);
+            elseClause->CodeGen(gen);
+            if (elseBlock->getTerminator() == nullptr)
+                gen.GetBuilder().CreateBr(endBlock);
+            gen.GetBuilder().SetInsertPoint(currentBlock);
+        }
+
+        auto expr = expression->CodeGen(gen);
+        if (llvm::isa<llvm::Constant>(expr->value))
+        {
+            std::cout << "Const";
+        }
+        if (expr->type->type->isIntegerTy() && expr->type->type->getIntegerBitWidth() == 1) // Make sure it is boolean type
+        {
+            gen.GetBuilder().CreateCondBr(expr->value, ifBlock, elseBlock);
+            // gen.GetCurrentFunction()->Function()->getBasicBlockList().push_back(ifBlock);
+            // if (ifBlock != endBlock)
+            //     gen.GetCurrentFunction()->Function()->getBasicBlockList().push_back(elseBlock);
+
+            gen.GetCurrentFunction()->Function()->getBasicBlockList().push_back(endBlock);
+            gen.GetBuilder().SetInsertPoint(endBlock);
+            delete expr;
+        }
+        else
+        {
+            delete expr;
+            // TODO throw error if expression is not boolean
+        }
+        return nullptr;
+    }
+
+    const CodeValue *TemplateStatement::CodeGen(CodeGeneration &gen) const
+    {
+        auto structType = llvm::StructType::create(gen.GetContext(), identifier.raw);
+        auto tValue = new CodeValue(nullptr, new CodeType(structType));
+
+        auto fnScope = gen.NewScope<TemplateNode>(identifier.raw, structType);
+        if (gen.IsUsed(CodeGeneration::Using::Export))
+            fnScope->Export();
+
+        gen.Use(CodeGeneration::Using::NoBlock);
+
+        body->CodeGen(gen);
+
+        structType->setBody(fnScope->GetMembers());
+
+        gen.LastScope();
+        return tValue;
+    }
+
+    const CodeValue *TemplateInitializer::CodeGen(CodeGeneration &gen) const
+    {
+        if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
+        {
+            auto fn = gen.GetInsertPoint()->findSymbol(identifier.raw)->second->As<TemplateNode>();
+            auto values = body->GetValues();
+            for(auto v : values) {
+                
+            }
+            // gen.GetBuilder().CreateStructGEP();
+        }
+        else
+        {
+            // TODO throw error can not find template
+        }
+    }
+
 } // namespace Parsing
 
 void PrintSymbols(const SymbolNode &node, const std::string &name, int index, const std::wstring &indent, bool last)
@@ -986,6 +1275,10 @@ void PrintSymbols(const SymbolNode &node, const std::string &name, int index, co
         std::cout << " Exported";
     if (name.size() > 0 && name[0] != '$')
         std::cout << " `" << name << "`" << std::endl;
+    else
+    {
+        std::cout << " new scope" << std::endl;
+    }
 
     std::wstring nindent = indent + (index == 0 ? L"" : (last ? L"    " : L"│   "));
     const auto &children = node.GetChildren();

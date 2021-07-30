@@ -1,5 +1,10 @@
-let f = 5
-export const f(let x: uint32) => {
-    const g = 5
-    let i = g
+
+template Object {
+    let f: uint32
+}
+
+const f() => {
+    let o = Object {
+        f: 0
+    }
 }

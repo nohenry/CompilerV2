@@ -40,7 +40,8 @@ enum class ErrorCode
     VariableInitializer,
     SampleSnippet,
     ExprBodyOnly,
-    ElseAfterElse
+    ElseAfterElse,
+    NoType
 };
 
 class BaseException

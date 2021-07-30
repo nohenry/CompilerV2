@@ -21,6 +21,7 @@ class ModuleUnit;
 
 namespace Parsing
 {
+
     class ExpressionSyntax : public SyntaxNode
     {
     public:
@@ -601,7 +602,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetIdentifier() const { return identifier; }
         const auto &GetBody() const { return *body; }
@@ -1081,6 +1082,15 @@ namespace Parsing
 
     using Statement = StatementSyntax *;
 
+    template <class T>
+    concept IsSyntaxNode = std::is_base_of<SyntaxNode, T>::value;
+
+    template <class T>
+    concept IsStatement = std::is_base_of<StatementSyntax, T>::value;
+
+    template <class T>
+    concept IsExpression = std::is_base_of<ExpressionSyntax, T>::value;
+
     class GenericParameterEntry : public SyntaxNode
     {
     private:
@@ -1273,17 +1283,20 @@ namespace Parsing
         const bool HasSet() const { return hasSet; }
     };
 
-    template <typename T = Statement>
+    template <IsSyntaxNode T = StatementSyntax>
     class BlockStatement : public StatementSyntax
     {
     private:
+        using PT = T *;
+
+    private:
         const Token &open;
-        std::vector<T> statements;
+        std::vector<PT> statements;
         const Token &close;
 
     public:
         BlockStatement(const Token &open,
-                       const std::vector<T> &statements,
+                       const std::vector<PT> &statements,
                        const Token &close) : open{open}, statements{statements}, close{close} {}
         virtual ~BlockStatement() {}
 
@@ -1311,16 +1324,22 @@ namespace Parsing
 
         virtual CodeValue *CodeGen(CodeGeneration &gen) const override
         {
-            if (gen.IsUsed(CodeGeneration::Using::NoBlock))
+            bool used = gen.IsUsed(CodeGeneration::Using::NoBlock);
+            if (used)
                 gen.UnUse(CodeGeneration::Using::NoBlock);
             else
                 gen.NewScope<ScopeNode>();
-                
+
             CodeValue *ret = nullptr;
             for (auto s : statements)
+            {
                 ret = (CodeValue *)s->CodeGen(gen);
+                if (static_cast<SyntaxNode *>(s)->GetType() == SyntaxType::ReturnStatement &&
+                    gen.GetInsertPoint()->GetType() == SymbolNodeType::FunctionNode)
+                    break;
+            }
 
-            if (!gen.IsUsed(CodeGeneration::Using::NoBlock))
+            if (!used)
                 gen.LastScope();
             return ret;
         }
@@ -1382,7 +1401,7 @@ namespace Parsing
             return body->GetStart();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
@@ -1481,7 +1500,10 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override
+        {
+            return expression->CodeGen(gen);
+        }
     };
 
     class VariableDeclerationStatement : public StatementSyntax
@@ -1599,7 +1621,7 @@ namespace Parsing
 
             if (inindex == gIndex)
                 return *generic;
-            else if (inindex >= pIndex && (inindex < pIndex + parameters.size()))
+            else if (pIndex > -1 && inindex >= pIndex && (inindex < pIndex + parameters.size()))
                 return *parameters[inindex - pIndex];
             else if (inindex == rIndex)
                 return *retType;
@@ -1732,7 +1754,10 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override
+        {
+            return body->CodeGen(gen);
+        }
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetBody() const { return *body; }
@@ -1785,7 +1810,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
@@ -1857,7 +1882,7 @@ namespace Parsing
 
         virtual const uint8_t NumChildren() const override
         {
-            return 1;
+            return expression == nullptr ? 0 : 1;
         }
 
         virtual const SyntaxNode &operator[](int index) const override
@@ -1875,7 +1900,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
@@ -2067,17 +2092,17 @@ namespace Parsing
     private:
         const Token &keyword;
         const Token &identifier;
-        BlockStatement<EnumIdentifierStatement *> *body;
+        BlockStatement<EnumIdentifierStatement> *body;
 
     public:
         EnumStatement(const Token &keyword,
                       const Token &identifier,
-                      BlockStatement<EnumIdentifierStatement *> *body) : keyword{keyword}, identifier{identifier}, body{body} {}
+                      BlockStatement<EnumIdentifierStatement> *body) : keyword{keyword}, identifier{identifier}, body{body} {}
         EnumStatement(const Token &keyword,
                       const Token &identifier,
                       const Token &left,
                       const std::vector<EnumIdentifierStatement *> &statements,
-                      const Token &right) : keyword{keyword}, identifier{identifier}, body{new BlockStatement(left, statements, right)} {}
+                      const Token &right) : keyword{keyword}, identifier{identifier}, body{new BlockStatement<EnumIdentifierStatement>(left, statements, right)} {}
         virtual ~EnumStatement() {}
 
         virtual const SyntaxType GetType() const override { return SyntaxType::EnumStatement; }
@@ -2230,12 +2255,12 @@ namespace Parsing
     private:
         const Token &keyword;
         Expression expr;
-        BlockStatement<MatchEntry *> *entries;
+        BlockStatement<MatchEntry> *entries;
 
     public:
         MatchExpression(const Token &keyword,
                         Expression expr,
-                        BlockStatement<MatchEntry *> *entries) : keyword{keyword}, expr{expr}, entries{entries}
+                        BlockStatement<MatchEntry> *entries) : keyword{keyword}, expr{expr}, entries{entries}
         {
         }
         virtual ~MatchExpression() {}

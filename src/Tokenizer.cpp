@@ -33,9 +33,9 @@ const TokenList &Tokenizer::Tokenize()
         Token current = TokenNull;
         if (c == ' ' || c == '\n' || c == '\r')
         {
-            if (c == '\n' || c == '\r' && tokenList.back().type != TokenType::Newline)
+            if (c == '\n' || c == '\r' && (tokenList.size() == 0 || tokenList.back().type != TokenType::Newline))
             {
-                auto start = tokenList.back().position.end;
+                auto start = (tokenList.size() == 0 ? Position() : tokenList.back().position.end );
                 auto end = start;
                 end.character++;
                 tokenList.add(Token(TokenType::Newline, Range(start, end)));

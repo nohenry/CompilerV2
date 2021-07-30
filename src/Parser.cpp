@@ -567,6 +567,12 @@ namespace Parsing
         if (right == TokenNull)
             return nullptr;
         auto type = ParseType();
+        // if (!type)
+        // {
+        //     ThrowParsingError(ErrorType::FunctionDecleration, ErrorCode::NoType,
+        //                       "Function Decleration needs a return type!",
+        //                       tokenIterator->position)
+        // }
         auto body = ParseStatement();
         return new FunctionDeclerationStatement(keyword, ident, generic, left, parameters, right, arrow, type, body);
     }
@@ -680,10 +686,10 @@ namespace Parsing
     Statement Parser::ParseReturnStatement()
     {
         const Token &keyword = Expect(TokenType::Return);
-        auto expression = ParseExpression();
-        if (expression)
-            return new ReturnStatement(keyword, expression);
-        return nullptr;
+        Expression expr = nullptr;
+        if (tokenIterator->type != TokenType::Newline)
+            expr = ParseExpression();
+        return new ReturnStatement(keyword, expr);
     }
 
     Statement Parser::ParseYieldStatement()
@@ -957,7 +963,7 @@ namespace Parsing
                 const Token &colon = Expect(TokenType::Colon);
                 auto value = ParseExpression();
                 values.push_back(new ObjectKeyValue(key, colon, value));
-                if (tokenIterator->type != TokenType::RightCurly)
+                if (tokenIterator->type != TokenType::RightCurly && tokenIterator->type != TokenType::Newline)
                     Expect(TokenType::Comma);
                 else if (tokenIterator->type == TokenType::Comma)
                     tokenIterator++;

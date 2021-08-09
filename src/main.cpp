@@ -16,6 +16,7 @@
 
 int main()
 {
+    uint32_t f;
     Tokenizer tokenizer("examples/input.dsl");
     // Tokenizer tokenizer("examples/test.dsl");
     const auto &tokenList = tokenizer.Tokenize();
@@ -36,15 +37,11 @@ int main()
     {
         Parsing::Parser parser(tokenList, tokenizer.GetFileIterator());
         auto mod = parser.ParseModule("input");
-
+uint32_t f;
         mod->CodeGen();
         mod->GetGen().GetModule().print(outputFile, nullptr);
         PrintSymbols(mod->GetGen().rootSymbols);
 
-        std::string mangledName;
-        llvm::raw_string_ostream mangledNameStream(mangledName);
-        llvm::Mangler::getNameWithPrefix(mangledNameStream, "add", mod->GetGen().GetModule().getDataLayout());
-        std::cout << mangledName << std::endl;
         // auto targetTriple = llvm::sys::getDefaultTargetTriple();
 
         // llvm::InitializeAllTargetInfos();

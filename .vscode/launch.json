@@ -8,7 +8,7 @@
             "name": "(lldb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/dsl",
+            "program": "${workspaceFolder}/build/CompilerV2",
             "preLaunchTask": "build",
             "args": [],
             "stopAtEntry": false,

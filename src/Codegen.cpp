@@ -93,7 +93,18 @@ CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
     }
     case SyntaxType::IdentifierType:
     {
-        // TODO search up in symbol tree
+        if (auto sym = FindSymbolInScope(node.As<IdentifierType>().GetToken().raw))
+        {
+            switch (sym->GetType())
+            {
+            case SymbolNodeType::TemplateNode:
+                return new CodeType(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type->type);
+            case SymbolNodeType::TypeAliasNode:
+                return new CodeType(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type->type);
+            default:
+                return nullptr;
+            }
+        }
         return nullptr;
     }
     case SyntaxType::ArrayType:
@@ -200,19 +211,18 @@ namespace Parsing
     {
         if (initializer && initializer->GetType() == SyntaxType::TemplateInitializer)
         {
-            auto symbol = gen.GetInsertPoint()->findSymbol(initializer->As<TemplateInitializer>().GetIdentifier().raw);
-            if (symbol != gen.GetInsertPoint()->GetChildren().end() && symbol->second->GetType() == SymbolNodeType::TemplateNode)
+            auto symbol = gen.FindSymbolInScope(initializer->As<TemplateInitializer>().GetIdentifier().raw);
+            if (symbol != nullptr && symbol->GetType() == SymbolNodeType::TemplateNode)
             {
-                auto templ = symbol->second->As<TemplateNode>();
+                auto &templ = symbol->As<TemplateNode>();
                 if (keyword.type == TokenType::Const) // Constant variable
                 {
                 }
                 else if (keyword.type == TokenType::Let)
                 {
-                    auto inst = gen.CreateEntryBlockAlloca(templ.GetTemplate(), identifier.raw); // Allocate the variable on the stack
+                    auto inst = gen.CreateEntryBlockAlloca(templ.GetTemplate()->type->type, identifier.raw); // Allocate the variable on the stack
 
-
-                    auto varValue = new CodeValue(inst, new CodeType(templ.GetTemplate()));
+                    auto varValue = new CodeValue(inst, templ.GetTemplate()->type);
                     gen.SetCurrentVar(varValue);
 
                     initializer->CodeGen(gen);
@@ -327,11 +337,13 @@ namespace Parsing
             }
             else if (gen.GetInsertPoint()->GetType() == SymbolNodeType::TemplateNode) // Template members
             {
-                auto tn = gen.GetInsertPoint()->As<TemplateNode>();
+                auto &tn = gen.GetInsertPoint()->As<TemplateNode>();
 
                 tn.AddMember(type->type);
 
-                gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, new CodeValue(nullptr, type));
+                auto val = new CodeValue(nullptr, type);
+                gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, val);
+                return val;
             }
         }
 
@@ -463,35 +475,35 @@ namespace Parsing
                 }
                 break;
             }
-            case TokenType::Or:
-            {
-                switch (left->type->type->getTypeID())
-                {
-                case llvm::Type::IntegerTyID:
-                    ret->value = gen.GetBuilder().CreateLogicalOr(left->value, right->value);
-                    break;
-                case llvm::Type::StructTyID:
-                    //  TODO operator overloading
-                    break;
-                default:
-                    break;
-                }
-                break;
-            }
-            case TokenType::And:
-            {
-                switch (left->type->type->getTypeID())
-                {
-                case llvm::Type::IntegerTyID:
-                    ret->value = gen.GetBuilder().CreateLogicalAnd(left->value, right->value);
-                    break;
-                case llvm::Type::StructTyID:
-                    //  TODO operator overloading
-                    break;
-                default:
-                    break;
-                }
-            }
+            // case TokenType::Or:
+            // {
+            //     switch (left->type->type->getTypeID())
+            //     {
+            //     case llvm::Type::IntegerTyID:
+            //         ret->value = gen.GetBuilder().Create(left->value, right->value);
+            //         break;
+            //     case llvm::Type::StructTyID:
+            //         //  TODO operator overloading
+            //         break;
+            //     default:
+            //         break;
+            //     }
+            //     break;
+            // }
+            // case TokenType::And:
+            // {
+            //     switch (left->type->type->getTypeID())
+            //     {
+            //     case llvm::Type::IntegerTyID:
+            //         ret->value = gen.GetBuilder().CreateLogicalAnd(left->value, right->value);
+            //         break;
+            //     case llvm::Type::StructTyID:
+            //         //  TODO operator overloading
+            //         break;
+            //     default:
+            //         break;
+            //     }
+            // }
             case TokenType::DoubleEqual:
             {
                 switch (left->type->type->getTypeID())
@@ -715,36 +727,36 @@ namespace Parsing
                 }
                 break;
             }
-            case TokenType::TripleRightShift:
-            {
-                switch (left->type->type->getTypeID())
-                {
-                case llvm::Type::IntegerTyID:
-                    ret->value = gen.GetBuilder().CreateROR(left->value, right->value);
-                    break;
-                case llvm::Type::StructTyID:
-                    //  TODO operator overloading
-                    break;
-                default:
-                    break;
-                }
-                break;
-            }
-            case TokenType::TripleLeftShift:
-            {
-                switch (left->type->type->getTypeID())
-                {
-                case llvm::Type::IntegerTyID:
-                    ret->value = gen.GetBuilder().CreateROL(left->value, right->value);
-                    break;
-                case llvm::Type::StructTyID:
-                    //  TODO operator overloading
-                    break;
-                default:
-                    break;
-                }
-                break;
-            }
+            // case TokenType::TripleRightShift:
+            // {
+            //     switch (left->type->type->getTypeID())
+            //     {
+            //     case llvm::Type::IntegerTyID:
+            //         ret->value = gen.GetBuilder().CreateROR(left->value, right->value);
+            //         break;
+            //     case llvm::Type::StructTyID:
+            //         //  TODO operator overloading
+            //         break;
+            //     default:
+            //         break;
+            //     }
+            //     break;
+            // }
+            // case TokenType::TripleLeftShift:
+            // {
+            //     switch (left->type->type->getTypeID())
+            //     {
+            //     case llvm::Type::IntegerTyID:
+            //         ret->value = gen.GetBuilder().CreateROL(left->value, right->value);
+            //         break;
+            //     case llvm::Type::StructTyID:
+            //         //  TODO operator overloading
+            //         break;
+            //     default:
+            //         break;
+            //     }
+            //     break;
+            // }
             default:
                 break;
             }
@@ -1059,13 +1071,11 @@ namespace Parsing
                  body->As<BlockStatement<>>().GetStatements().back()->GetType() == SyntaxType::ExpressionStatement) ||
                 body->GetType() == SyntaxType::ExpressionStatement)
             {
-                auto type = gen.TypeType(*retType);
-                auto casted = gen.Cast(funcBody, type);
+                auto casted = gen.Cast(funcBody, funcReturnType);
                 gen.Return(casted->value);
                 // gen.GetBuilder().CreateRet(casted->value);
                 if (casted != funcBody)
                     delete casted;
-                delete type;
             }
 
             auto cfv = gen.GetCurrentFunction();
@@ -1077,7 +1087,7 @@ namespace Parsing
                 cfv->lastbr->eraseFromParent();
 
                 cfv->GetReturnLocation()->eraseFromParent();
-                gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(fValue->Function()->getFunctionType()->getReturnType()));
+                // gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(fValue->Function()->getFunctionType()->getReturnType()));
                 if (p->getValueID() == llvm::Value::BasicBlockVal)
                     gen.GetBuilder().SetInsertPoint(p);
                 gen.GetBuilder().CreateRet(cfv->lastStoreValue);
@@ -1136,13 +1146,6 @@ namespace Parsing
 
             gen.Return(expr->value);
             return nullptr;
-            // auto ret = gen.GetBuilder().CreateRet(expr->value);
-            // auto val = new CodeValue(ret, new CodeType(ret->getType()));
-            // if (expr != cgen)
-            //     delete expr;
-            // if (llvm::isa<llvm::Constant>(cgen->value))
-            //     delete cgen;
-            // return val;
         }
         else
         {
@@ -1150,9 +1153,6 @@ namespace Parsing
 
             gen.Return(llvm::Constant::getNullValue(retType));
             return nullptr;
-            // auto ret = gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(retType));
-            // auto val = new CodeValue(ret, new CodeType(ret->getType()));
-            // return val;
         }
     }
 
@@ -1212,7 +1212,12 @@ namespace Parsing
 
     const CodeValue *TemplateStatement::CodeGen(CodeGeneration &gen) const
     {
-        auto structType = llvm::StructType::create(gen.GetContext(), identifier.raw);
+        if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
+        {
+            // TODO throw error template name already found
+            return nullptr;
+        }
+        auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
         auto tValue = new CodeValue(nullptr, new CodeType(structType));
 
         auto fnScope = gen.NewScope<TemplateNode>(identifier.raw, structType);
@@ -1231,19 +1236,72 @@ namespace Parsing
 
     const CodeValue *TemplateInitializer::CodeGen(CodeGeneration &gen) const
     {
-        if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
+        if (auto sym = gen.FindSymbolInScope<TemplateNode>(identifier.raw))
         {
-            auto fn = gen.GetInsertPoint()->findSymbol(identifier.raw)->second->As<TemplateNode>();
+            auto &children = sym->GetChildren();
             auto values = body->GetValues();
-            for(auto v : values) {
-                
+            llvm::Value *strc = nullptr;
+            if (gen.GetCurrentVar())
+            {
+                strc = gen.GetCurrentVar()->value;
             }
-            // gen.GetBuilder().CreateStructGEP();
+            else
+            {
+                strc = gen.CreateEntryBlockAlloca(sym->GetTemplate()->type->type, "");
+            }
+
+            for (auto v : values)
+            {
+                const auto &key = v->GetKey().raw;
+                auto found = sym->findSymbol(key);
+                if (found != children.end() && found->second->GetType() == SymbolNodeType::VariableNode)
+                {
+                    int index = std::distance(children.begin(), found);
+                    auto gep = gen.GetBuilder().CreateStructGEP(sym->GetTemplate()->type->type, strc, index);
+                    auto val = gen.Cast(v->GetValue().CodeGen(gen), dynamic_cast<VariableNode *>(found->second)->GetVariable()->type);
+                    gen.GetBuilder().CreateStore(val->value, gep);
+                }
+                else
+                {
+                    // TODO throw error key value not found in template
+                }
+            }
+            if (!gen.GetCurrentVar())
+            {
+                return new CodeValue(gen.GetBuilder().CreateLoad(strc), sym->GetTemplate()->type);
+            }
+            else
+            {
+                return nullptr;
+            }
         }
         else
         {
             // TODO throw error can not find template
         }
+    }
+
+    const CodeValue *ActionBaseStatement::CodeGen(CodeGeneration &gen) const
+    {
+        auto type = gen.TypeType(*templateType);
+        TypeSyntax *t = templateType;
+
+        while (t->GetType() == SyntaxType::GenericType)
+            t = t->As<GenericType>().GetBaseType();
+
+        if (type)
+        {
+            // std::string str = templateType->GetType() == SyntaxType::IdentifierType ? templateType->As<IdentifierType>().GetToken().raw : templateType->As<GenericType>().
+
+            auto actnScope = gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+
+            gen.Use(CodeGeneration::Using::NoBlock);
+
+            body->CodeGen(gen);
+
+            gen.LastScope();
+        }
+        return nullptr;
     }
 
 } // namespace Parsing
@@ -1307,6 +1365,7 @@ std::ostream &operator<<(std::ostream &stream, const SymbolNodeType &e)
         ets(VariableNode);
         ets(TypeAliasNode);
         ets(ScopeNode);
+        ets(ActionNode);
     }
 #undef ets
     return stream;

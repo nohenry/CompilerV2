@@ -70,6 +70,23 @@ public:
     void IncNumRets() { numRets++; }
 };
 
+struct TemplateCodeValue : public CodeValue
+{
+    TemplateCodeValue(llvm::StructType *type) : CodeValue(nullptr, new CodeType(type))
+    {
+    }
+
+    ~TemplateCodeValue()
+    {
+        delete type;
+    }
+
+    llvm::StructType *Template() const
+    {
+        return static_cast<llvm::StructType *>(type->type);
+    }
+};
+
 class CodeGeneration;
 
 enum class SymbolNodeType
@@ -82,6 +99,7 @@ enum class SymbolNodeType
     TemplateNode,
     TypeAliasNode,
     ScopeNode,
+    ActionNode,
 };
 
 class SymbolNode;
@@ -144,7 +162,7 @@ public:
     std::string GenerateName()
     {
         std::string s;
-        uint64_t scope;
+        uint64_t scope = 0;
         do
         {
             s = "$";
@@ -155,6 +173,9 @@ public:
 
     template <typename T>
     const T &As() const { return *dynamic_cast<const T *>(this); }
+
+    template <typename T>
+    T &As() { return *dynamic_cast<T *>(this); }
 
     void Export() { isExported = true; }
     void NoExport() { isExported = false; }
@@ -216,12 +237,15 @@ public:
 class TemplateNode : public SymbolNode
 {
 private:
-    llvm::StructType *templ;
+    TemplateCodeValue *templ;
     std::vector<llvm::Type *> members;
 
 public:
-    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{templ} {}
-    virtual ~TemplateNode() {}
+    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{new TemplateCodeValue(templ)} {}
+    virtual ~TemplateNode()
+    {
+        delete templ;
+    }
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::TemplateNode; }
 
@@ -250,6 +274,19 @@ public:
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::ScopeNode; }
 };
 
+class ActionNode : public SymbolNode
+{
+private:
+    std::string type;
+
+public:
+    ActionNode(SymbolNode *parent, const std::string &type) : SymbolNode{parent}, type{type} {}
+    virtual ~ActionNode() {}
+
+    const virtual SymbolNodeType GetType() const override { return SymbolNodeType::ActionNode; }
+    const auto &GetTypename() const { return type; }
+};
+
 void PrintSymbols(const SymbolNode &node, const std::string &name = "root", int index = 0, const std::wstring &indent = L"", bool last = false);
 
 class CodeGeneration
@@ -272,8 +309,8 @@ private:
     llvm::Module *module;
 
     SymbolNode *insertPoint = nullptr;
-    FunctionCodeValue *currentFunction;
-    CodeValue *currentVar;
+    FunctionCodeValue *currentFunction = nullptr;
+    CodeValue *currentVar = nullptr;
 
     std::bitset<64> usings;
 
@@ -332,6 +369,15 @@ public:
         return nullptr;
     }
 
+    template <IsSymbolNode T>
+    T *FindSymbolInScope(std::string name)
+    {
+        if (auto sym = FindSymbolInScope(name))
+            if (auto tsym = dynamic_cast<T *>(sym))
+                return tsym;
+        return nullptr;
+    }
+
     const auto GetCurrentFunction() const
     {
         return currentFunction;
@@ -365,11 +411,23 @@ public:
         std::string s = std::to_string(name.size()) + name;
         for (auto p = insertPoint; p != nullptr && p->GetParent() != nullptr;)
         {
-            std::string nname = insertPoint->GetParent()->findSymbol(insertPoint);
+            std::string nname = p->GetType() == SymbolNodeType::ActionNode ? p->As<ActionNode>().GetTypename() : p->GetParent()->findSymbol(p);
             s = std::to_string(nname.size()) + nname + s;
             p = p->GetParent();
         }
-        s = "_ZN10" + s;
+        s = "_ZN" + s;
+        return s;
+    }
+
+    std::string GenerateMangledTypeName(const std::string &name)
+    {
+        std::string s = name;
+        for (auto p = insertPoint; p != nullptr && p->GetParent() != nullptr;)
+        {
+            std::string nname = insertPoint->GetParent()->findSymbol(insertPoint);
+            s = nname + "." + s;
+            p = p->GetParent();
+        }
         return s;
     }
 

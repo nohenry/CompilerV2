@@ -11,7 +11,7 @@
 #include <Token.hpp>
 #include <Trie.hpp>
 #include <Errors.hpp>
-// #include <ModuleUnit.hpp>
+#include <CodeGen.hpp>
 
 #include <llvm/IR/Value.h>
 
@@ -317,7 +317,8 @@ namespace Parsing
             return right.GetEnd();
         }
 
-        const auto &GetBaseType() const { return *type; }
+        // const auto &GetBaseType() const { return *type; }
+        auto GetBaseType() { return type; }
         const auto &GetLeft() const { return left; }
         const auto &GetArguments() const { return arguments; }
         const auto &GetRight() const { return right; }
@@ -1987,7 +1988,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetTemplateType() const { return *templateType; }

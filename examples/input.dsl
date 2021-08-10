@@ -1,6 +1,11 @@
+template Inline {
+    let i: uint32
+}
+
 template Object {
     let f: uint32
     let x: bool
+    let i: Inline
 }
 
 action Object {
@@ -10,10 +15,9 @@ action Object {
 }
 
 const f() => {
-    if true {
-
+    let o = Object {
+        f: 0,
+        x: true
     }
-    loop 10 5 {
-
-    }
+    // let var = o.f.x
 }

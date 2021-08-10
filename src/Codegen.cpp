@@ -6,6 +6,7 @@
 #include <llvm/IR/Verifier.h>
 #include <llvm/IR/Constants.h>
 #include <llvm/IR/Type.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
 
 #ifdef PLATFORM_WINDOWS
 #include <io.h>
@@ -1150,8 +1151,11 @@ namespace Parsing
         else
         {
             // TODO throw error about empty return statement with non void function
+            if (retType->isVoidTy())
+                gen.Return();
+            else
+                gen.Return(llvm::Constant::getNullValue(retType));
 
-            gen.Return(llvm::Constant::getNullValue(retType));
             return nullptr;
         }
     }
@@ -1300,6 +1304,41 @@ namespace Parsing
             body->CodeGen(gen);
 
             gen.LastScope();
+        }
+        return nullptr;
+    }
+
+    const CodeValue *LoopStatement::CodeGen(CodeGeneration &gen) const
+    {
+        if (expression)
+        {
+            // TODO use range type
+        }
+        else
+        {
+            llvm::BasicBlock *startBlock = nullptr;
+            // auto startBlock = llvm::BasicBlock::Create(gen.GetContext(), "", gen.GetCurrentFunction()->Function()); // Start of loop {
+            auto endBlock = llvm::BasicBlock::Create(gen.GetContext(), "", gen.GetCurrentFunction()->Function()); // End of loop }
+            if (gen.GetBuilder().GetInsertBlock()->getTerminator() == nullptr)
+            {
+                /* If the previous block doesn't have a terminator and has 
+                   no instructions then reuse the block as the starting block for the loop */
+                if (gen.GetBuilder().GetInsertBlock()->getInstList().size() == 0)
+                    startBlock = gen.GetBuilder().GetInsertBlock();
+                else
+                {
+                    startBlock = llvm::BasicBlock::Create(gen.GetContext(), "", gen.GetCurrentFunction()->Function());
+                    gen.GetBuilder().CreateBr(startBlock);
+                }
+            }
+            else
+                startBlock = llvm::BasicBlock::Create(gen.GetContext(), "", gen.GetCurrentFunction()->Function());
+
+            gen.GetBuilder().SetInsertPoint(startBlock);
+            if (body)
+                body->CodeGen(gen);
+            gen.GetBuilder().CreateBr(startBlock);
+            gen.GetBuilder().SetInsertPoint(endBlock);
         }
         return nullptr;
     }

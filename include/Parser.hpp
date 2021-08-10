@@ -1836,7 +1836,7 @@ namespace Parsing
 
         virtual const uint8_t NumChildren() const override
         {
-            return 2;
+            return 1 + (expression == nullptr ? 0 : 1);
         }
 
         virtual const SyntaxNode &operator[](int index) const override
@@ -1844,7 +1844,8 @@ namespace Parsing
             switch (index)
             {
             case 0:
-                return *expression;
+                if(expression != nullptr) return *expression;
+                else return *body;
             case 1:
                 return *body;
             }
@@ -1861,7 +1862,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }

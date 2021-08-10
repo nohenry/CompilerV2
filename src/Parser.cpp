@@ -673,13 +673,12 @@ namespace Parsing
     Statement Parser::ParseLoopStatement()
     {
         const Token &keyword = Expect(TokenType::Loop);
-        auto expression = ParseExpression();
-        if (expression)
-        {
-            auto body = ParseStatement();
-            if (body)
-                return new LoopStatement(keyword, expression, body);
-        }
+        Expression expression = nullptr;
+        if (tokenIterator->type != TokenType::LeftCurly)
+            expression = ParseExpression();
+        auto body = ParseStatement();
+        if (body)
+            return new LoopStatement(keyword, expression, body);
         return nullptr;
     }
 
@@ -1135,10 +1134,10 @@ namespace Parsing
         {
             return ParseIdentifier();
         }
-        case TokenType::LeftCurly:
-        {
-            return ParseObjectInitializer();
-        }
+        // case TokenType::LeftCurly:
+        // {
+        //     return ParseObjectInitializer();
+        // }
         case TokenType::LeftSquare:
         {
             return ParseArrayLiteral();

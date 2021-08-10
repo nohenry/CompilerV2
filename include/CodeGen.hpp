@@ -109,7 +109,7 @@ concept IsSymbolNode = std::is_base_of<SymbolNode, T>::value;
 
 class SymbolNode
 {
-protected:
+public:
     std::map<std::string, SymbolNode *> children;
     SymbolNode *parent;
     bool isExported = false;
@@ -124,8 +124,8 @@ public:
 
     const virtual SymbolNodeType GetType() const { return SymbolNodeType::SymbolNode; }
 
-    const auto findSymbol(std::string name) const
-    {
+    const auto findSymbol(const std::string &name) const
+    {       
         return children.find(name);
     }
 
@@ -139,7 +139,7 @@ public:
         return std::string("");
     }
 
-    const auto GetParent() const { return parent; }
+    auto GetParent() { return parent; }
     const auto &GetChildren() const { return children; }
 
     void AddChild(std::string symbolName, SymbolNode *child)
@@ -148,7 +148,7 @@ public:
     }
 
     template <IsSymbolNode T, typename... Args>
-    T *AddChild(std::string symbolName, Args... args)
+    T *AddChild(const std::string &symbolName, Args... args)
     {
         if (findSymbol(symbolName) != children.end())
         {
@@ -357,10 +357,9 @@ public:
     }
 
     // Iterate backwards the symbol tree to see if the specified symbol name  exits
-    SymbolNode *FindSymbolInScope(std::string name)
+    SymbolNode *FindSymbolInScope(const std::string &name)
     {
-        auto look = insertPoint;
-        for (; look != nullptr; look = insertPoint->GetParent())
+        for (auto look = insertPoint; look != nullptr; look = look->parent)
         {
             auto current = look->findSymbol(name);
             if (current != look->GetChildren().end())
@@ -370,7 +369,7 @@ public:
     }
 
     template <IsSymbolNode T>
-    T *FindSymbolInScope(std::string name)
+    T *FindSymbolInScope(const std::string &name)
     {
         if (auto sym = FindSymbolInScope(name))
             if (auto tsym = dynamic_cast<T *>(sym))
@@ -431,7 +430,7 @@ public:
         return s;
     }
 
-    void Return(llvm::Value *val)
+    void Return(llvm::Value *val = nullptr)
     {
         if (currentFunction && currentFunction->GetReturnLocation())
         {

@@ -70,21 +70,26 @@ public:
     void IncNumRets() { numRets++; }
 };
 
-struct TemplateCodeValue : public CodeValue
+class TemplateNode;
+
+struct TemplateCodeValue : public CodeType
 {
-    TemplateCodeValue(llvm::StructType *type) : CodeValue(nullptr, new CodeType(type))
+    const TemplateNode &node;
+
+    TemplateCodeValue(llvm::StructType *type, const TemplateNode &node) : CodeType(type), node{node}
     {
     }
 
     ~TemplateCodeValue()
     {
-        delete type;
     }
 
     llvm::StructType *Template() const
     {
-        return static_cast<llvm::StructType *>(type->type);
+        return static_cast<llvm::StructType *>(type);
     }
+
+    const TemplateNode &GetNode() { return node; }
 };
 
 class CodeGeneration;
@@ -110,7 +115,7 @@ concept IsSymbolNode = std::is_base_of<SymbolNode, T>::value;
 class SymbolNode
 {
 public:
-    std::map<std::string, SymbolNode *> children;
+    std::unordered_map<std::string, SymbolNode *> children;
     SymbolNode *parent;
     bool isExported = false;
 
@@ -125,7 +130,7 @@ public:
     const virtual SymbolNodeType GetType() const { return SymbolNodeType::SymbolNode; }
 
     const auto findSymbol(const std::string &name) const
-    {       
+    {
         return children.find(name);
     }
 
@@ -139,10 +144,16 @@ public:
         return std::string("");
     }
 
+    auto IndexOf(std::unordered_map<std::string, SymbolNode *>::const_iterator node) const
+    {
+        std::unordered_map<std::string, SymbolNode *>::const_iterator begin = children.begin();
+        return std::distance(begin, node);
+    }
+
     auto GetParent() { return parent; }
     const auto &GetChildren() const { return children; }
 
-    void AddChild(std::string symbolName, SymbolNode *child)
+    void AddChild(const std::string &symbolName, SymbolNode *child)
     {
         children.insert(std::pair<std::string, SymbolNode *>(symbolName, child));
     }
@@ -223,10 +234,10 @@ public:
 class VariableNode : public SymbolNode
 {
 private:
-    CodeValue *variable;
+    const CodeValue *variable;
 
 public:
-    VariableNode(SymbolNode *parent, CodeValue *variable) : SymbolNode{parent}, variable{variable} {}
+    VariableNode(SymbolNode *parent, const CodeValue *variable) : SymbolNode{parent}, variable{variable} {}
     virtual ~VariableNode() {}
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::VariableNode; }
@@ -241,7 +252,7 @@ private:
     std::vector<llvm::Type *> members;
 
 public:
-    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{new TemplateCodeValue(templ)} {}
+    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{new TemplateCodeValue(templ, *this)} {}
     virtual ~TemplateNode()
     {
         delete templ;
@@ -313,11 +324,13 @@ private:
     CodeValue *currentVar = nullptr;
 
     std::bitset<64> usings;
+    SymbolNode *syms; 
 
 public:
     CodeGeneration(const std::string &moduleName) : builder{context}, module{new llvm::Module(moduleName, context)}
     {
         insertPoint = rootSymbols.AddChild<ModuleNode>(moduleName);
+        syms = &rootSymbols;
     }
 
 public:
@@ -329,6 +342,8 @@ public:
     CodeType *TypeType(const Parsing::SyntaxNode &node);
     const CodeValue *Cast(const CodeValue *value, CodeType *toType, bool implicit = true);
     static uint8_t GetNumBits(uint64_t val);
+    TemplateCodeValue *TypeFromObjectInitializer(const Parsing::SyntaxNode &object);
+    CodeValue *FollowDotChain(const Parsing::SyntaxNode &);
 
     // Creates a new scope and sets the insert point for new symbols
     template <IsSymbolNode T, typename... Args>
@@ -423,8 +438,9 @@ public:
         std::string s = name;
         for (auto p = insertPoint; p != nullptr && p->GetParent() != nullptr;)
         {
-            std::string nname = insertPoint->GetParent()->findSymbol(insertPoint);
-            s = nname + "." + s;
+            std::string nname = p->GetParent()->findSymbol(insertPoint);
+            if (nname != "")
+                s = nname + "." + s;
             p = p->GetParent();
         }
         return s;

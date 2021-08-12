@@ -1134,10 +1134,10 @@ namespace Parsing
         {
             return ParseIdentifier();
         }
-        // case TokenType::LeftCurly:
-        // {
-        //     return ParseObjectInitializer();
-        // }
+        case TokenType::LeftCurly:
+        {
+            return ParseObjectInitializer();
+        }
         case TokenType::LeftSquare:
         {
             return ParseArrayLiteral();
@@ -1783,6 +1783,11 @@ std::ostream &operator<<(std::ostream &stream, const Parsing::SyntaxNode &node)
         {
             if (node.As<Parsing::MatchEntry>().IsElse())
                 stream << " Default";
+            break;
+        }
+        case Parsing::SyntaxType::ObjectKeyValue:
+        {
+            stream << " `" << node.As<Parsing::ObjectKeyValue>().GetKey().raw << "`";
             break;
         }
         case Parsing::SyntaxType::ExpressionBodySpecStatement:

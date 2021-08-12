@@ -562,7 +562,7 @@ namespace Parsing
             return right.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetLeft() const { return left; }
         const auto &GetValues() const { return values; }

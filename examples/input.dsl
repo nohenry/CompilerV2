@@ -10,14 +10,22 @@ template Object {
 
 action Object {
     const doSomething() => {
-        
+
     }
 }
 
 const f() => {
+
+
     let o = Object {
         f: 0,
-        x: true
+        x: true,
+        i: {
+            i: 5
+        }
     }
+
+    let x = o.i.i
+
     // let var = o.f.x
 }

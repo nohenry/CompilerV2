@@ -290,7 +290,7 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
         {
             if (left->type->type->isPointerTy())
             {
-                auto loaded = builder.CreateLoad(left->value);
+                auto loaded = builder.CreateLoad(left->type->type, left->value);
                 left->type->type = left->type->type->getPointerElementType();
                 left = new CodeValue(loaded, left->type);
             }
@@ -324,7 +324,7 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
                             auto index = templNode.IndexOf(found);
                             auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
-                            auto load = builder.CreateLoad(gep);
+                            auto load = builder.CreateLoad(templ->type, gep);
                             auto value = new CodeValue(load, found->second->As<VariableNode>().GetVariable()->type);
                             value->type->type = load->getType();
                             return value;
@@ -369,7 +369,7 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
                         auto index = templNode.IndexOf(found);
                         auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
-                        auto load = builder.CreateLoad(gep);
+                        auto load = builder.CreateLoad(templ->type, gep);
                         auto value = new CodeValue(load, found->second->As<VariableNode>().GetVariable()->type);
                         value->type->type = load->getType();
                         return value;
@@ -1133,7 +1133,7 @@ namespace Parsing
         case TokenType::Ampersand:
         {
 
-            if (expr->value->getValueID() == llvm::Instruction::Alloca + llvm::Value::InstructionVal || expr->value->getValueID() == llvm::Instruction::GetElementPtr + llvm::Value::InstructionVal)
+            if (expr->value->getValueID() == (uint32_t)llvm::Instruction::Alloca + (uint32_t)llvm::Value::InstructionVal || expr->value->getValueID() == (uint32_t)llvm::Instruction::GetElementPtr + (uint32_t)llvm::Value::InstructionVal)
             {
                 // llvm::Instruction::AddrSpaceCast
                 // expr->value->getType()->getPointerTo->print(llvm::outs());
@@ -1176,7 +1176,7 @@ namespace Parsing
                 }
                 else
                 {
-                    auto load = gen.GetBuilder().CreateLoad(f->value);
+                    auto load = gen.GetBuilder().CreateLoad(f->type->type, f->value);
                     auto value = new CodeValue(load, f->type);
                     value->type->type = load->getType();
                     return value;
@@ -1344,6 +1344,7 @@ namespace Parsing
         for (auto &arg : checkFunc->args())
         {
             auto inst = gen.CreateEntryBlockAlloca(arg.getType(), this->parameters[index]->GetIdentifier().raw); // Allocate the variable on the stack
+            gen.GetBuilder().CreateStore(&arg, inst);
 
             auto varValue = new CodeValue(inst, funcVal->GetParameters()[index]);
 
@@ -1393,7 +1394,7 @@ namespace Parsing
                     gen.GetBuilder().CreateBr(retBlock);
                 checkFunc->getBasicBlockList().push_back(retBlock);
                 gen.GetBuilder().SetInsertPoint(retBlock);
-                auto load = gen.GetBuilder().CreateLoad(cfv->GetReturnLocation());
+                auto load = gen.GetBuilder().CreateLoad(cfv->type->type, cfv->GetReturnLocation());
                 gen.GetBuilder().CreateRet(load);
             }
             else
@@ -1636,7 +1637,7 @@ namespace Parsing
             gen.SetCurrentVar(tempCurr);
             if (!gen.GetCurrentVar())
             {
-                return new CodeValue(gen.GetBuilder().CreateLoad(strc), sym->GetTemplate());
+                return new CodeValue(gen.GetBuilder().CreateLoad(sym->GetTemplate()->type, strc), sym->GetTemplate());
             }
             else
                 return nullptr;

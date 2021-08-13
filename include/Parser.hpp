@@ -2256,7 +2256,7 @@ namespace Parsing
             return stmt->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const {}
 
         const auto &GetExpression() const { return *expr; }
         const auto &GetArrow() const { return arrow; }

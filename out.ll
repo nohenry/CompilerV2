@@ -8,6 +8,8 @@ define private void @_ZN5input6Object11doSomething(%input.Object* %0, i32 %1) {
 entry:
   %f = alloca i32, align 4
   %self = alloca %input.Object*, align 8
+  store %input.Object* %0, %input.Object** %self, align 8
+  store i32 %1, i32* %f, align 4
   %2 = load %input.Object*, %input.Object** %self, align 8
   %3 = getelementptr inbounds %input.Object, %input.Object* %2, i32 0, i32 0
   %4 = load i32, i32* %f, align 4

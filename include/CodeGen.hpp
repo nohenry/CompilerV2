@@ -24,6 +24,16 @@ struct CodeType
     CodeType(llvm::Type *type, bool isSigned = false) : type{type}, isSigned{isSigned}
     {
     }
+
+    bool operator==(const CodeType &right) const
+    {
+        return type == right.type && isSigned == right.isSigned;
+    }
+
+    bool operator!=(const CodeType &right) const
+    {
+        return !(*this == right);
+    }
 };
 
 struct CodeValue
@@ -42,6 +52,8 @@ private:
     llvm::AllocaInst *retLoc;
     llvm::BasicBlock *retLabel;
     int numRets = 0;
+    std::vector<CodeType *> parameters;
+    bool isMember;
 
 public:
     llvm::Value *lastStoreValue = nullptr;
@@ -49,7 +61,7 @@ public:
     llvm::BranchInst *lastbr = nullptr;
 
 public:
-    FunctionCodeValue(llvm::Value *value, CodeType *type, llvm::AllocaInst *retLoc = nullptr, llvm::BasicBlock *retLabel = nullptr) : CodeValue(value, type), retLoc{retLoc}, retLabel{retLabel}
+    FunctionCodeValue(llvm::Value *value, CodeType *type, std::vector<CodeType *> parameters, bool isMember, llvm::AllocaInst *retLoc = nullptr, llvm::BasicBlock *retLabel = nullptr) : CodeValue(value, type), retLoc{retLoc}, retLabel{retLabel}, parameters{parameters}, isMember{isMember}
     {
     }
 
@@ -67,16 +79,23 @@ public:
     void SetReturnLocation(llvm::AllocaInst *ret) { retLoc = ret; }
     auto GetNumRets() { return numRets; }
     auto GetReturnLabel() { return retLabel; }
+    void SetReturnLabel(llvm::BasicBlock *ret) { retLabel = ret; }
     void IncNumRets() { numRets++; }
+    const auto &GetParameters() const { return parameters; }
+    const bool IsMember() const { return isMember; }
 };
 
 class TemplateNode;
 
 struct TemplateCodeValue : public CodeType
 {
-    const TemplateNode &node;
+    TemplateNode &node;
 
-    TemplateCodeValue(llvm::StructType *type, const TemplateNode &node) : CodeType(type), node{node}
+    TemplateCodeValue(CodeType &type, TemplateNode &node) : CodeType(type), node{node}
+    {
+    }
+
+    TemplateCodeValue(llvm::Type *type, TemplateNode &node) : CodeType(type), node{node}
     {
     }
 
@@ -89,7 +108,33 @@ struct TemplateCodeValue : public CodeType
         return static_cast<llvm::StructType *>(type);
     }
 
-    const TemplateNode &GetNode() { return node; }
+    TemplateNode &GetNode() { return node; }
+};
+
+class SpecNode;
+
+struct SpecCodeValue : public CodeType
+{
+    SpecNode &node;
+
+    SpecCodeValue(CodeType &type, SpecNode &node) : CodeType(type), node{node}
+    {
+    }
+
+    SpecCodeValue(llvm::Type *type, SpecNode &node) : CodeType(type), node{node}
+    {
+    }
+
+    ~SpecCodeValue()
+    {
+    }
+
+    llvm::StructType *Spec() const
+    {
+        return static_cast<llvm::StructType *>(type);
+    }
+
+    SpecNode &GetNode() { return node; }
 };
 
 class CodeGeneration;
@@ -105,6 +150,7 @@ enum class SymbolNodeType
     TypeAliasNode,
     ScopeNode,
     ActionNode,
+    SpecNode
 };
 
 class SymbolNode;
@@ -129,7 +175,7 @@ public:
 
     const virtual SymbolNodeType GetType() const { return SymbolNodeType::SymbolNode; }
 
-    const auto findSymbol(const std::string &name) const
+    virtual const std::unordered_map<std::string, SymbolNode *>::const_iterator findSymbol(const std::string &name) const
     {
         return children.find(name);
     }
@@ -147,7 +193,20 @@ public:
     auto IndexOf(std::unordered_map<std::string, SymbolNode *>::const_iterator node) const
     {
         std::unordered_map<std::string, SymbolNode *>::const_iterator begin = children.begin();
-        return std::distance(begin, node);
+        int index = 0;
+        for (auto &c : children)
+        {
+            if (c.second->GetType() == SymbolNodeType::VariableNode)
+            {
+                if (c == *node)
+                {
+                    break;
+                }
+                index++;
+            }
+        }
+        return index;
+        // return std::distance(begin, node);
     }
 
     auto GetParent() { return parent; }
@@ -228,7 +287,7 @@ public:
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::FunctionNode; }
 
-    const auto GetFunction() const { return function; }
+    const auto GetFunction() const { return static_cast<FunctionCodeValue *>(function); }
 };
 
 class VariableNode : public SymbolNode
@@ -243,6 +302,19 @@ public:
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::VariableNode; }
 
     const auto GetVariable() const { return variable; }
+};
+
+class ActionNode : public SymbolNode
+{
+private:
+    std::string type;
+
+public:
+    ActionNode(SymbolNode *parent, const std::string &type) : SymbolNode{parent}, type{type} {}
+    virtual ~ActionNode() {}
+
+    const virtual SymbolNodeType GetType() const override { return SymbolNodeType::ActionNode; }
+    const auto &GetTypename() const { return type; }
 };
 
 class TemplateNode : public SymbolNode
@@ -260,9 +332,27 @@ public:
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::TemplateNode; }
 
+    // const SymbolNode *findSymbolWithAction(const std::string &name) const
+    // {
+    //     auto c = children.find(name);
+    //     if (c != children.end())
+    //         return c->second;
+
+    //     for (auto &action : actions)
+    //     {
+    //         auto c1 = action->findSymbol(name);
+    //         if (c1 != action->children.end())
+    //             return c1->second;
+    //     }
+    //     return nullptr;
+    // }
+
     const auto GetTemplate() const { return templ; }
     void AddMember(llvm::Type *val) { members.push_back(val); }
     auto GetMembers() { return members; }
+
+    // const auto &GetAction() const { return actions; }
+    // void AddAction(ActionNode *action) { actions.push_back(action); }
 };
 
 class TypeAliasNode : public SymbolNode
@@ -285,17 +375,14 @@ public:
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::ScopeNode; }
 };
 
-class ActionNode : public SymbolNode
+class SpecNode : public SymbolNode
 {
 private:
-    std::string type;
-
 public:
-    ActionNode(SymbolNode *parent, const std::string &type) : SymbolNode{parent}, type{type} {}
-    virtual ~ActionNode() {}
+    SpecNode(SymbolNode *parent) : SymbolNode{parent} {}
+    virtual ~SpecNode() {}
 
-    const virtual SymbolNodeType GetType() const override { return SymbolNodeType::ActionNode; }
-    const auto &GetTypename() const { return type; }
+    const virtual SymbolNodeType GetType() const override { return SymbolNodeType::SpecNode; }
 };
 
 void PrintSymbols(const SymbolNode &node, const std::string &name = "root", int index = 0, const std::wstring &indent = L"", bool last = false);
@@ -322,15 +409,15 @@ private:
     SymbolNode *insertPoint = nullptr;
     FunctionCodeValue *currentFunction = nullptr;
     CodeValue *currentVar = nullptr;
+    CodeType *currentType = nullptr;
+    CodeValue *dotExprBase = nullptr;
 
     std::bitset<64> usings;
-    SymbolNode *syms; 
 
 public:
     CodeGeneration(const std::string &moduleName) : builder{context}, module{new llvm::Module(moduleName, context)}
     {
         insertPoint = rootSymbols.AddChild<ModuleNode>(moduleName);
-        syms = &rootSymbols;
     }
 
 public:
@@ -344,6 +431,8 @@ public:
     static uint8_t GetNumBits(uint64_t val);
     TemplateCodeValue *TypeFromObjectInitializer(const Parsing::SyntaxNode &object);
     CodeValue *FollowDotChain(const Parsing::SyntaxNode &);
+
+    void GenerateMain();
 
     // Creates a new scope and sets the insert point for new symbols
     template <IsSymbolNode T, typename... Args>
@@ -369,6 +458,11 @@ public:
     auto GetInsertPoint()
     {
         return insertPoint;
+    }
+
+    void SetInsertPoint(SymbolNode *newIns)
+    {
+        insertPoint = newIns;
     }
 
     // Iterate backwards the symbol tree to see if the specified symbol name  exits
@@ -410,6 +504,26 @@ public:
     void SetCurrentVar(CodeValue *var)
     {
         currentVar = var;
+    }
+
+    const auto GetCurrentType() const
+    {
+        return currentType;
+    }
+
+    void SetCurrentType(CodeType *var)
+    {
+        currentType = var;
+    }
+
+    const auto GetDotExprBase() const
+    {
+        return dotExprBase;
+    }
+
+    void SetDotExprBase(CodeValue *var)
+    {
+        dotExprBase = var;
     }
 
     llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type, const std::string &VarName, llvm::Function *func = nullptr)

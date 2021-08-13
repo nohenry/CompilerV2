@@ -18,7 +18,13 @@ public:
     virtual const CodeValue *CodeGen()
     {
         generation.Use(CodeGeneration::Using::NoBlock);
-        return syntaxTree.CodeGen(generation);
+        syntaxTree.PreCodeGen(generation);
+        // generation.GetModule().print(llvm::outs(), nullptr);
+        // return nullptr;
+        auto gen = syntaxTree.CodeGen(generation);
+        generation.GenerateMain();
+
+        return gen;
     }
 
     const auto &GetGen() const { return generation; }

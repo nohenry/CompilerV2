@@ -8,24 +8,29 @@ template Object {
     let i: Inline
 }
 
-action Object {
-    const doSomething() => {
+spec Create {
+    const create()
+}
 
+action Object {
+    const doSomething(let self, let f: uint) => {
+        self.f = f
     }
 }
 
-const f() => {
-
-
-    let o = Object {
-        f: 0,
-        x: true,
-        i: {
-            i: 5
+action Object: Create {
+    const create() => Object {
+        return Object {
+            f: 0,
+            x: true,
+            i: {
+                i: 5
+            }
         }
     }
+}
 
-    let x = o.i.i
-
-    // let var = o.f.x
+const main() => {
+    let o = Object.create()
+    o.doSomething(5)
 }

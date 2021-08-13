@@ -102,6 +102,8 @@ CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
                 return new TemplateCodeValue(static_cast<llvm::StructType *>(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type), *dynamic_cast<TemplateNode *>(sym));
             case SymbolNodeType::TypeAliasNode:
                 return new TemplateCodeValue(static_cast<llvm::StructType *>(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type), *dynamic_cast<TemplateNode *>(sym));
+            case SymbolNodeType::SpecNode:
+                return new SpecCodeValue(nullptr, *dynamic_cast<SpecNode *>(sym));
             default:
                 return nullptr;
             }
@@ -252,42 +254,87 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
         bool isReference = IsUsed(Using::Reference);
         Use(Using::Reference);
 
-        auto left = bin.GetLHS().CodeGen(*this);
+        auto left = (CodeValue *)bin.GetLHS().CodeGen(*this);
 
         if (!isReference)
             UnUse(Using::Reference);
-        // if() {
 
-        // }
-        if (auto templ = static_cast<TemplateCodeValue *>(left->type))
+        if (left->value == nullptr)
         {
-            const auto &templNode = templ->GetNode();
-            auto found = templNode.findSymbol(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
-            if (found != templNode.children.end())
+            if (auto templ = static_cast<TemplateCodeValue *>(left->type))
             {
-                if (IsUsed(CodeGeneration::Using::Reference)) // Return reference and don't load
-                {
-                    auto index = templNode.IndexOf(found);
-                    auto gep = builder.CreateStructGEP(templ->type, left->value, index);
+                const auto &templNode = templ->GetNode();
 
-                    auto value = new CodeValue(gep, found->second->As<VariableNode>().GetVariable()->type);
-                    // value->type->type = gep->getType();
-                    return value;
-                }
-                else // Load value
+                auto found = templNode.findSymbol(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
+                if (found != templNode.children.end())
                 {
-                    auto index = templNode.IndexOf(found);
-                    auto gep = builder.CreateStructGEP(templ->type, left->value, index);
-
-                    auto load = builder.CreateLoad(gep);
-                    auto value = new CodeValue(load, found->second->As<VariableNode>().GetVariable()->type);
-                    value->type->type = load->getType();
-                    return value;
+                    if (found->second->GetType() == SymbolNodeType::FunctionNode)
+                    {
+                        if (!found->second->As<FunctionNode>().GetFunction()->IsMember())
+                        {
+                            return found->second->As<FunctionNode>().GetFunction();
+                        }
+                        else
+                        {
+                            // Function cannot be called on non instance type
+                        }
+                    }
+                    else
+                    {
+                        // TODO throw erro cannot access variable from non instance object
+                    }
                 }
             }
-            else
+        }
+        else
+        {
+            if (left->type->type->isPointerTy())
             {
-                // TODO throw error cannot find symbol x in y
+                auto loaded = builder.CreateLoad(left->value);
+                left->type->type = left->type->type->getPointerElementType();
+                left = new CodeValue(loaded, left->type);
+            }
+            dotExprBase = (CodeValue *)left;
+
+            if (auto templ = static_cast<TemplateCodeValue *>(left->type))
+            {
+                const auto &templNode = templ->GetNode();
+
+                auto found = templNode.findSymbol(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
+                if (found != templNode.children.end())
+                {
+                    if (found->second->GetType() == SymbolNodeType::FunctionNode)
+                    {
+                        return found->second->As<FunctionNode>().GetFunction();
+                    }
+                    else
+                    {
+                        auto found = templNode.findSymbol(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
+                        if (IsUsed(CodeGeneration::Using::Reference)) // Return reference and don't load
+                        {
+                            auto index = templNode.IndexOf(found);
+                            auto gep = builder.CreateStructGEP(templ->type, left->value, index);
+
+                            auto value = new CodeValue(gep, found->second->As<VariableNode>().GetVariable()->type);
+                            // value->type->type = gep->getType();
+                            return value;
+                        }
+                        else // Load value
+                        {
+                            auto index = templNode.IndexOf(found);
+                            auto gep = builder.CreateStructGEP(templ->type, left->value, index);
+
+                            auto load = builder.CreateLoad(gep);
+                            auto value = new CodeValue(load, found->second->As<VariableNode>().GetVariable()->type);
+                            value->type->type = load->getType();
+                            return value;
+                        }
+                    }
+                }
+                else
+                {
+                    // TODO throw error cannot find symbol x in y
+                }
             }
         }
     }
@@ -307,18 +354,26 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
             auto found = templNode.findSymbol(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
             if (found != templNode.children.end())
             {
-                if (IsUsed(CodeGeneration::Using::Reference)) // Return reference and don't load
+                if (found->second->GetType() == SymbolNodeType::FunctionNode)
                 {
+                    return found->second->As<FunctionNode>().GetFunction();
                 }
-                else // Load value
+                else
                 {
-                    auto index = templNode.IndexOf(found);
-                    auto gep = builder.CreateStructGEP(templ->type, left->value, index);
+                    auto found = templNode.findSymbol(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
+                    if (IsUsed(CodeGeneration::Using::Reference)) // Return reference and don't load
+                    {
+                    }
+                    else // Load value
+                    {
+                        auto index = templNode.IndexOf(found);
+                        auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
-                    auto load = builder.CreateLoad(gep);
-                    auto value = new CodeValue(load, found->second->As<VariableNode>().GetVariable()->type);
-                    value->type->type = load->getType();
-                    return value;
+                        auto load = builder.CreateLoad(gep);
+                        auto value = new CodeValue(load, found->second->As<VariableNode>().GetVariable()->type);
+                        value->type->type = load->getType();
+                        return value;
+                    }
                 }
             }
             else
@@ -328,6 +383,25 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
         }
     }
     return nullptr;
+}
+
+void CodeGeneration::GenerateMain()
+{
+    if (auto programMain = dynamic_cast<FunctionNode *>(FindSymbolInScope("main")))
+    {
+        std::vector<llvm::Type *> parameters;
+        parameters.push_back(llvm::IntegerType::get(context, 32));
+        parameters.push_back(llvm::IntegerType::get(context, 8)->getPointerTo()->getPointerTo());
+
+        auto functionType = llvm::FunctionType::get(llvm::IntegerType::get(context, 32), parameters, false);
+        auto mainFunc = llvm::Function::Create(functionType, llvm::Function::ExternalLinkage, 0, "main", module);
+
+        auto insertPoint = llvm::BasicBlock::Create(context, "entry", mainFunc);
+        builder.SetInsertPoint(insertPoint);
+
+        builder.CreateCall(programMain->GetFunction()->Function(), std::vector<llvm::Value *>());
+        builder.CreateRet(llvm::ConstantInt::get(llvm::IntegerType::get(context, 32), 0));
+    }
 }
 
 namespace Parsing
@@ -349,7 +423,6 @@ namespace Parsing
 
                     auto varValue = new CodeValue(inst, templ.GetTemplate());
                     gen.SetCurrentVar(varValue);
-
                     initializer->CodeGen(gen);
 
                     gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
@@ -521,7 +594,14 @@ namespace Parsing
         if (op.type == TokenType::Dot)
             return gen.FollowDotChain(*this);
 
+        if (op.type == TokenType::Equal)
+            gen.Use(CodeGeneration::Using::Reference);
+
         auto left = LHS->CodeGen(gen);
+
+        if (op.type == TokenType::Equal)
+            gen.UnUse(CodeGeneration::Using::Reference);
+
         auto right = RHS->CodeGen(gen);
         if (left && right && (left->type->type == right->type->type || (left->type->type->getTypeID() == llvm::Type::IntegerTyID && right->type->type->getTypeID() == llvm::Type::IntegerTyID)))
         {
@@ -895,6 +975,14 @@ namespace Parsing
                 }
                 break;
             }
+            case TokenType::Equal:
+            {
+                auto val = gen.Cast(right, left->type);
+
+                ret->value = gen.GetBuilder().CreateStore(val->value, left->value);
+                delete val;
+                break;
+            }
 
             // case TokenType::TripleRightShift:
             // {
@@ -1100,6 +1188,12 @@ namespace Parsing
                 // f->type->type = f->value->getType();
                 return f;
             }
+            case SymbolNodeType::TemplateNode:
+            {
+                auto t = found->As<TemplateNode>().GetTemplate();
+                // f->type->type = f->value->getType();
+                return new CodeValue(nullptr, t);
+            }
             default:
                 break;
             }
@@ -1113,26 +1207,36 @@ namespace Parsing
         auto fnExpr = static_cast<const FunctionCodeValue *>(fn->CodeGen(gen));
         if (fnExpr)
         {
-            if (fnExpr->Function()->arg_size() != arguments.size())
+            size_t argSize = arguments.size();
+            bool needsThis = gen.GetDotExprBase() != nullptr && fnExpr->IsMember();
+            if (needsThis)
+                argSize++;
+
+            if (fnExpr->Function()->arg_size() != argSize)
             {
                 // TODO throw error arguments don't match
                 return nullptr;
             }
-            std::vector<llvm::Value *> args(arguments.size());
-            auto checkargs = fnExpr->Function()->args().begin();
+
+            std::vector<llvm::Value *> args;
+
+            if (needsThis)
+                args.push_back(gen.GetDotExprBase()->value);
+
+            auto checkargs = fnExpr->GetParameters().begin();
+
+            if (needsThis)
+                checkargs++;
+
             for (auto v : arguments)
             {
                 auto val = v->CodeGen(gen);
-                if (val->type->type == checkargs->getType())
-                {
-                    args.push_back(val->value);
-                }
-                else
-                {
-                    // TODO throw error arg type doesn't match!
-                }
+                auto casted = gen.Cast(val, *checkargs);
+
+                args.push_back(casted->value);
                 checkargs++;
                 delete val;
+                delete casted;
             }
             auto call = gen.GetBuilder().CreateCall(fnExpr->Function(), args);
             return new CodeValue(call, fnExpr->type);
@@ -1209,40 +1313,47 @@ namespace Parsing
 
     const CodeValue *FunctionDeclerationStatement::CodeGen(CodeGeneration &gen) const
     {
-        auto checkFunc = gen.GetModule().getFunction(identifier.raw);
-        CodeType *funcReturnType;
-        if (!checkFunc)
-        {
-            funcReturnType = (retType == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*retType));
-            std::vector<llvm::Type *> parameters;
-            for (auto p : this->parameters)
-                parameters.push_back(gen.TypeType(*p->GetVariableType())->type);
-            auto functionType = llvm::FunctionType::get(funcReturnType->type, parameters, false);
-            checkFunc = llvm::Function::Create(functionType, gen.IsUsed(CodeGeneration::Using::Export) ? llvm::Function::ExternalLinkage : llvm::Function::PrivateLinkage, 0, gen.GenerateMangledName(identifier.raw), &(gen.GetModule()));
-            if (IsPrototype())
-                return new CodeValue(checkFunc, new CodeType(functionType));
-        }
+        auto checkFunc = gen.GetModule().getFunction(gen.GenerateMangledName(identifier.raw));
+        auto found = gen.GetInsertPoint()->findSymbol(identifier.raw);
 
         if (!checkFunc->empty())
         {
             // TODO log error about function already existing
         }
 
-        auto retBlock = llvm::BasicBlock::Create(gen.GetContext());
-        auto fValue = new FunctionCodeValue(checkFunc, funcReturnType, nullptr, retBlock);
-        gen.SetCurrentFunction(fValue);
+        if (found == gen.GetInsertPoint()->children.end() && found->second->GetType() != SymbolNodeType::FunctionNode)
+            return nullptr;
 
-        auto fnScope = gen.NewScope<FunctionNode>(identifier.raw, fValue);
+        auto func = found->second->As<FunctionNode>();
+        auto funcVal = func.GetFunction();
+
+        auto retBlock = llvm::BasicBlock::Create(gen.GetContext());
+        funcVal->SetReturnLabel(retBlock);
+
+        gen.SetCurrentFunction(funcVal);
+
+        auto lastScope = gen.GetInsertPoint();
+        gen.SetInsertPoint(found->second);
         if (gen.IsUsed(CodeGeneration::Using::Export))
-            fnScope->Export();
+            func.Export();
 
         auto insertPoint = llvm::BasicBlock::Create(gen.GetContext(), "entry", checkFunc);
         gen.GetBuilder().SetInsertPoint(insertPoint);
 
+        int index = 0;
+        for (auto &arg : checkFunc->args())
+        {
+            auto inst = gen.CreateEntryBlockAlloca(arg.getType(), this->parameters[index]->GetIdentifier().raw); // Allocate the variable on the stack
+
+            auto varValue = new CodeValue(inst, funcVal->GetParameters()[index]);
+
+            gen.GetInsertPoint()->AddChild<VariableNode>(this->parameters[index++]->GetIdentifier().raw, varValue);
+        }
+
         if (retType)
         {
             auto retval = gen.CreateEntryBlockAlloca(checkFunc->getFunctionType()->getReturnType(), "ret");
-            fValue->SetReturnLocation(retval);
+            funcVal->SetReturnLocation(retval);
         }
 
         gen.Use(CodeGeneration::Using::NoBlock);
@@ -1255,7 +1366,7 @@ namespace Parsing
                  body->As<BlockStatement<>>().GetStatements().back()->GetType() == SyntaxType::ExpressionStatement) ||
                 body->GetType() == SyntaxType::ExpressionStatement)
             {
-                auto casted = gen.Cast(funcBody, funcReturnType);
+                auto casted = gen.Cast(funcBody, funcVal->type);
                 gen.Return(casted->value);
                 // gen.GetBuilder().CreateRet(casted->value);
                 if (casted != funcBody)
@@ -1289,7 +1400,7 @@ namespace Parsing
             {
                 // TODO throw error about empty return statement with non void function
                 cfv->GetReturnLocation()->eraseFromParent();
-                gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(fValue->Function()->getFunctionType()->getReturnType()));
+                gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(funcVal->Function()->getFunctionType()->getReturnType()));
                 return nullptr;
             }
         }
@@ -1299,11 +1410,49 @@ namespace Parsing
         if (llvm::verifyFunction(*checkFunc, &llvm::errs()))
             return nullptr;
 
-        gen.LastScope();
-        return fValue;
+        // gen.LastScope();
+        gen.SetInsertPoint(lastScope);
+        return funcVal;
 
         checkFunc->eraseFromParent();
         return nullptr;
+    }
+
+    void FunctionDeclerationStatement::PreCodeGen(CodeGeneration &gen) const
+    {
+        CodeType *funcReturnType;
+        std::vector<CodeType *> funcParameters;
+        bool member = false;
+
+        funcReturnType = (retType == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*retType));
+        std::vector<llvm::Type *> parameters;
+
+        if (this->parameters.size() > 0 && this->parameters[0]->GetVariableType() == nullptr)
+        {
+            auto type = new TemplateCodeValue(*static_cast<TemplateCodeValue *>(gen.GetCurrentType()));
+            type->type = type->type->getPointerTo();
+            parameters.push_back(type->type);
+            funcParameters.push_back(type);
+            member = true;
+        }
+
+        for (auto p : this->parameters)
+            if (p->GetVariableType())
+            {
+                auto type = gen.TypeType(*p->GetVariableType());
+                parameters.push_back(type->type);
+                funcParameters.push_back(type);
+            }
+        auto functionType = llvm::FunctionType::get(funcReturnType->type, parameters, false);
+        auto checkFunc = llvm::Function::Create(functionType, gen.IsUsed(CodeGeneration::Using::Export) ? llvm::Function::ExternalLinkage : llvm::Function::PrivateLinkage, 0, gen.GenerateMangledName(identifier.raw), &(gen.GetModule()));
+
+        auto fValue = new FunctionCodeValue(checkFunc, funcReturnType, funcParameters, member, nullptr, nullptr);
+
+        auto fnScope = gen.NewScope<FunctionNode>(identifier.raw, fValue);
+        if (gen.IsUsed(CodeGeneration::Using::Export))
+            fnScope->Export();
+
+        gen.LastScope();
     }
 
     const CodeValue *ExportDecleration::CodeGen(CodeGeneration &gen) const
@@ -1399,10 +1548,37 @@ namespace Parsing
 
     const CodeValue *TemplateStatement::CodeGen(CodeGeneration &gen) const
     {
+        // if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
+        // {
+        //     // TODO throw error template name already found
+        //     return nullptr;
+        // }
+        // auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
+
+        // auto fnScope = gen.NewScope<TemplateNode>(identifier.raw, structType);
+        // auto tValue = new TemplateCodeValue(structType, *fnScope);
+
+        // if (gen.IsUsed(CodeGeneration::Using::Export))
+        //     fnScope->Export();
+
+        // gen.Use(CodeGeneration::Using::NoBlock);
+
+        // body->CodeGen(gen);
+
+        // structType->setBody(fnScope->GetMembers());
+
+        // gen.LastScope();
+        // return new CodeValue(nullptr, tValue);
+
+        return nullptr;
+    }
+
+    void TemplateStatement::PreCodeGen(CodeGeneration &gen) const
+    {
         if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
         {
             // TODO throw error template name already found
-            return nullptr;
+            return;
         }
         auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
 
@@ -1419,7 +1595,6 @@ namespace Parsing
         structType->setBody(fnScope->GetMembers());
 
         gen.LastScope();
-        return new CodeValue(nullptr, tValue);
     }
 
     const CodeValue *TemplateInitializer::CodeGen(CodeGeneration &gen) const
@@ -1441,6 +1616,7 @@ namespace Parsing
                 if (found != children.end() && found->second->GetType() == SymbolNodeType::VariableNode)
                 {
                     int index = sym->IndexOf(found);
+
                     auto gep = gen.GetBuilder().CreateStructGEP(sym->GetTemplate()->type, strc, index);
                     auto newVal = new CodeValue(gep, found->second->As<VariableNode>().GetVariable()->type);
                     gen.SetCurrentVar(newVal);
@@ -1516,25 +1692,238 @@ namespace Parsing
 
     const CodeValue *ActionBaseStatement::CodeGen(CodeGeneration &gen) const
     {
+        // auto type = gen.TypeType(*templateType);
+        // TypeSyntax *t = templateType;
+
+        // while (t->GetType() == SyntaxType::GenericType)
+        //     t = t->As<GenericType>().GetBaseType();
+
+        // auto foundA = gen.GetInsertPoint()->findSymbol()
+
+        // if (type)
+        // {
+        //     // std::string str = templateType->GetType() == SyntaxType::IdentifierType ? templateType->As<IdentifierType>().GetToken().raw : templateType->As<GenericType>().
+        //     auto found = gen.FindSymbolInScope(t->As<IdentifierType>().GetToken().raw);
+
+        //     if (found && found->GetType() == SymbolNodeType::TemplateNode)
+        //     {
+        //         auto actnScope = gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+        //         found->As<TemplateNode>().AddAction(actnScope);
+        //         gen.SetCurrentType(found->As<TemplateNode>().GetTemplate());
+
+        //         gen.Use(CodeGeneration::Using::NoBlock);
+
+        //         body->CodeGen(gen);
+
+        //         gen.LastScope();
+        //     }
+        // }
         auto type = gen.TypeType(*templateType);
         TypeSyntax *t = templateType;
 
         while (t->GetType() == SyntaxType::GenericType)
             t = t->As<GenericType>().GetBaseType();
 
+        auto lastScope = gen.GetInsertPoint();
+
         if (type)
         {
-            // std::string str = templateType->GetType() == SyntaxType::IdentifierType ? templateType->As<IdentifierType>().GetToken().raw : templateType->As<GenericType>().
+            auto found = gen.FindSymbolInScope(t->As<IdentifierType>().GetToken().raw);
 
-            auto actnScope = gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+            if (found && found->GetType() == SymbolNodeType::TemplateNode)
+            {
+                gen.SetInsertPoint(found);
+
+                gen.SetCurrentType(found->As<TemplateNode>().GetTemplate());
+
+                gen.Use(CodeGeneration::Using::NoBlock);
+                body->CodeGen(gen);
+
+                gen.SetInsertPoint(lastScope);
+            }
+            // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+        }
+        return nullptr;
+    }
+
+    void ActionBaseStatement::PreCodeGen(CodeGeneration &gen) const
+    {
+        auto type = gen.TypeType(*templateType);
+        // auto type = gen.TypeType(*templateType);
+        // TypeSyntax *t = templateType;
+
+        // while (t->GetType() == SyntaxType::GenericType)
+        //     t = t->As<GenericType>().GetBaseType();
+
+        auto lastScope = gen.GetInsertPoint();
+
+        if (type)
+        {
+            auto &node = static_cast<TemplateCodeValue *>(type)->GetNode();
+            // auto found = gen.FindSymbolInScope(t->As<IdentifierType>().GetToken().raw);
+
+            // if (found && found->GetType() == SymbolNodeType::TemplateNode)
+            // {
+            gen.SetInsertPoint(&node);
+
+            gen.SetCurrentType(node.GetTemplate());
+
+            gen.Use(CodeGeneration::Using::NoBlock);
+            body->PreCodeGen(gen);
+
+            gen.SetInsertPoint(lastScope);
+            // }
+            // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+        }
+    }
+
+    const CodeValue *ActionSpecStatement::CodeGen(CodeGeneration &gen) const
+    {
+        auto type = gen.TypeType(*templateType);
+        // TypeSyntax *t = templateType;
+
+        // while (t->GetType() == SyntaxType::GenericType)
+        //     t = t->As<GenericType>().GetBaseType();
+
+        auto specType = gen.TypeType(*this->specType);
+        auto lastScope = gen.GetInsertPoint();
+
+        if (type && specType)
+        {
+            auto &node = static_cast<TemplateCodeValue *>(type)->GetNode();
+            // auto found = gen.FindSymbolInScope(t->As<IdentifierType>().GetToken().raw);
+
+            // if (found && found->GetType() == SymbolNodeType::TemplateNode)
+            // {
+            gen.SetInsertPoint(&node);
+
+            gen.SetCurrentType(node.GetTemplate());
+
+            gen.Use(CodeGeneration::Using::NoBlock);
+            body->CodeGen(gen);
+
+            gen.SetInsertPoint(lastScope);
+            // }
+            // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+        }
+
+        return nullptr;
+    }
+
+    void ActionSpecStatement::PreCodeGen(CodeGeneration &gen) const
+    {
+        auto type = gen.TypeType(*templateType);
+        auto specType = gen.TypeType(*this->specType);
+
+        auto lastScope = gen.GetInsertPoint();
+
+        if (type && specType)
+        {
+            auto &node = static_cast<TemplateCodeValue *>(type)->GetNode();
+            auto &specNode = static_cast<SpecCodeValue *>(specType)->GetNode();
+
+            gen.SetInsertPoint(&node);
+
+            gen.SetCurrentType(node.GetTemplate());
 
             gen.Use(CodeGeneration::Using::NoBlock);
 
-            body->CodeGen(gen);
+            for (auto &stmt : body->GetStatements())
+            {
+                switch (stmt->GetType())
+                {
+                case SyntaxType::FunctionDeclerationStatement:
+                {
+                    auto &func = stmt->As<FunctionDeclerationStatement>();
+                    auto found = specNode.findSymbol(func.GetIdentifier().raw);
 
-            gen.LastScope();
+                    if (found != specNode.children.end() && found->second->GetType() != SymbolNodeType::FunctionNode)
+                    {
+                        // TODO throw error symbol is not a function in spec
+                    }
+                    else if (found != specNode.children.end())
+                    {
+                        auto &foundFunc = found->second->As<FunctionNode>();
+
+                        auto retType = (func.GetRetType() == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*func.GetRetType()));
+                        bool member = false;
+                        std::vector<CodeType *> funcParameters;
+
+                        if (func.GetParameters().size() > 0 && func.GetParameters()[0]->GetVariableType() == nullptr)
+                        {
+                            // auto type = new TemplateCodeValue(*static_cast<TemplateCodeValue *>(gen.GetCurrentType()));
+                            // type->type = type->type->getPointerTo();
+                            funcParameters.push_back(nullptr);
+                            member = true;
+                        }
+
+                        for (auto p : func.GetParameters())
+                            if (p->GetVariableType())
+                            {
+                                auto type = gen.TypeType(*p->GetVariableType());
+                                funcParameters.push_back(type);
+                            }
+
+                        if (foundFunc.GetFunction()->IsMember() != member)
+                        {
+                            // TODO throw error spec implementatin argumetns not the same
+                            break;
+                        }
+
+                        if (foundFunc.GetFunction()->GetParameters().size() != func.GetParameters().size())
+                        {
+                            // TODO throw erro function signarture does not match spec functions signature
+                            break;
+                        }
+
+                        if (member)
+                        {
+                            for (size_t i = 1; i < funcParameters.size(); i++)
+                            {
+                                auto pType = gen.TypeType(*func.GetParameters()[i]->GetVariableType());
+                                if (pType != foundFunc.GetFunction()->GetParameters()[i])
+                                {
+                                    delete pType;
+                                    // TODO throw error function signarture doesnt match spec signature
+                                    break;
+                                }
+                                delete pType;
+                            }
+                        }
+                        else
+                        {
+                            for (size_t i = 0; i < funcParameters.size(); i++)
+                            {
+                                auto pType = gen.TypeType(*func.GetParameters()[i]->GetVariableType());
+                                if (pType != foundFunc.GetFunction()->GetParameters()[i])
+                                {
+                                    delete pType;
+                                    // TODO throw error function signarture doesnt match spec signature
+                                    break;
+                                }
+                                delete pType;
+                            }
+                        }
+                        // gen.GetInsertPoint()->AddChild<FunctionNode>(func.GetIdentifier().raw, new FunctionCodeValue(nullptr, retType, funcParameters, member));
+                    }
+                    else
+                    {
+                        // TODO throw error function not in spec
+                    }
+
+                    break;
+                }
+
+                default:
+                    break;
+                }
+            }
+
+            body->PreCodeGen(gen);
+
+            gen.SetInsertPoint(lastScope);
+            // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
         }
-        return nullptr;
     }
 
     const CodeValue *LoopStatement::CodeGen(CodeGeneration &gen) const
@@ -1570,6 +1959,47 @@ namespace Parsing
             gen.GetBuilder().SetInsertPoint(endBlock);
         }
         return nullptr;
+    }
+
+    const CodeValue *SpecStatement::CodeGen(CodeGeneration &gen) const
+    {
+        return nullptr;
+    }
+
+    void SpecStatement::PreCodeGen(CodeGeneration &gen) const
+    {
+        // auto type = gen.TypeType(*templateType);
+        // TypeSyntax *t = templateType;
+
+        // while (t->GetType() == SyntaxType::GenericType)
+        //     t = t->As<GenericType>().GetBaseType();
+
+        auto scope = gen.NewScope<SpecNode>(identifier.raw);
+        for (auto &stmt : body->GetStatements())
+        {
+            auto &func = stmt->As<FunctionDeclerationStatement>();
+            auto retType = (func.GetRetType() == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*func.GetRetType()));
+            bool member = false;
+            std::vector<CodeType *> funcParameters;
+
+            if (func.GetParameters().size() > 0 && func.GetParameters()[0]->GetVariableType() == nullptr)
+            {
+                // auto type = new TemplateCodeValue(*static_cast<TemplateCodeValue *>(gen.GetCurrentType()));
+                // type->type = type->type->getPointerTo();
+                funcParameters.push_back(nullptr);
+                member = true;
+            }
+
+            for (auto p : func.GetParameters())
+                if (p->GetVariableType())
+                {
+                    auto type = gen.TypeType(*p->GetVariableType());
+                    funcParameters.push_back(type);
+                }
+
+            gen.GetInsertPoint()->AddChild<FunctionNode>(func.GetIdentifier().raw, new FunctionCodeValue(nullptr, retType, funcParameters, member));
+        }
+        gen.LastScope();
     }
 
 } // namespace Parsing
@@ -1634,6 +2064,7 @@ std::ostream &operator<<(std::ostream &stream, const SymbolNodeType &e)
         ets(TypeAliasNode);
         ets(ScopeNode);
         ets(ActionNode);
+        ets(SpecNode);
     }
 #undef ets
     return stream;

@@ -1345,6 +1345,12 @@ namespace Parsing
             return ret;
         }
 
+        virtual void PreCodeGen(CodeGeneration &gen) const override
+        {
+            for (auto s : statements)
+                s->PreCodeGen(gen);
+        }
+
         const auto &GetOpen() const { return open; }
         const auto &GetStatements() const { return statements; }
         const auto &GetClose() const { return close; }
@@ -1403,6 +1409,7 @@ namespace Parsing
         }
 
         virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
@@ -1462,7 +1469,8 @@ namespace Parsing
             return body->GetStart();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
@@ -1642,6 +1650,7 @@ namespace Parsing
         }
 
         virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
@@ -1650,7 +1659,7 @@ namespace Parsing
         const auto &GetParameters() const { return parameters; }
         const auto &GetRightParen() const { return right; }
         const auto &GetFuncArrow() const { return arrow; }
-        const auto &GetRetType() const { return retType; }
+        const auto GetRetType() const { return retType; }
         const auto &GetBody() const { return body; }
         const bool IsPrototype() const { return body == nullptr; }
     };
@@ -1844,8 +1853,10 @@ namespace Parsing
             switch (index)
             {
             case 0:
-                if(expression != nullptr) return *expression;
-                else return *body;
+                if (expression != nullptr)
+                    return *expression;
+                else
+                    return *body;
             case 1:
                 return *body;
             }
@@ -1990,7 +2001,7 @@ namespace Parsing
         }
 
         virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
-
+        virtual void PreCodeGen(CodeGeneration &gen) const override;
         const auto &GetKeyword() const { return keyword; }
         const auto &GetTemplateType() const { return *templateType; }
         const auto &GetBody() const { return *body; }
@@ -2044,7 +2055,8 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetSpecType() const { return *specType; }
@@ -2244,7 +2256,7 @@ namespace Parsing
             return stmt->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const {}
+        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetExpression() const { return *expr; }
         const auto &GetArrow() const { return arrow; }

@@ -715,7 +715,7 @@ namespace Parsing
                 {
                     auto body = dynamic_cast<BlockStatement<> *>(ParseActionBody());
                     if (body)
-                        return new ActionSpecStatement(keyword, typeA, in, typeB, body);
+                        return new ActionSpecStatement(keyword, typeB, in, typeA, body);
                     else
                         return nullptr;
                 }

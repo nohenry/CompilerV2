@@ -7,6 +7,7 @@
 #include <cassert>
 
 struct Position;
+class CodeGeneration;
 
 namespace Parsing
 {
@@ -77,6 +78,8 @@ namespace Parsing
 
         const virtual uint8_t NumChildren() const = 0;
         const virtual SyntaxNode &operator[](int index) const = 0;
+
+        virtual void PreCodeGen(CodeGeneration &gen) const {}
 
         virtual const Position &GetStart() const = 0;
         virtual const Position &GetEnd() const = 0;

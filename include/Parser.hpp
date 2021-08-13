@@ -26,7 +26,7 @@ namespace Parsing
     {
     public:
         virtual ~ExpressionSyntax() {}
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const = 0;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const = 0;
     };
 
     using Expression = ExpressionSyntax *;
@@ -358,7 +358,7 @@ namespace Parsing
             return valueToken.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const uint64_t GetValue() const { return valueToken.ivalue; }
         const std::string &GetRawValue() const { return valueToken.raw; }
@@ -398,7 +398,7 @@ namespace Parsing
             return valueToken.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const double GetValue() const { return valueToken.fvalue; }
         const std::string &GetRawValue() const { return valueToken.raw; }
@@ -439,7 +439,7 @@ namespace Parsing
             return boolToken.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetBoolToken() const { return boolToken; }
         const auto &GetValue() const { return value; }
@@ -479,7 +479,7 @@ namespace Parsing
             return token.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetToken() const { return token; }
         const auto &GetValue() const { return token.raw; }
@@ -562,7 +562,7 @@ namespace Parsing
             return right.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetLeft() const { return left; }
         const auto &GetValues() const { return values; }
@@ -603,7 +603,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetIdentifier() const { return identifier; }
         const auto &GetBody() const { return *body; }
@@ -649,7 +649,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        // virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        // virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const ExpressionSyntax &GetExpression() const override { return *expression; }
     };
@@ -698,7 +698,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        // virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        // virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const ExpressionSyntax &GetExpression() const override { return *expression; }
         const auto &GetColon() const { return colon; }
@@ -740,7 +740,7 @@ namespace Parsing
             return right.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetLeft() const { return left; }
         const auto &GetValues() const { return values; }
@@ -789,7 +789,7 @@ namespace Parsing
             return RHS->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetLHS() const { return *LHS; }
         const auto &GetRHS() const { return *RHS; }
@@ -835,7 +835,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetExpression() const { return *expression; }
         const auto &GetOperator() const { return op; }
@@ -880,7 +880,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetExpression() const { return *expression; }
         const auto &GetOperator() const { return op; }
@@ -917,7 +917,7 @@ namespace Parsing
             return identifierToken.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetIdentiferToken() const { return identifierToken; }
     };
@@ -965,7 +965,7 @@ namespace Parsing
             return arguments.back()->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetFunctionExpression() const { return *fn; }
         const auto &GetFunctionArgs() const { return arguments; }
@@ -1016,7 +1016,7 @@ namespace Parsing
             return right.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetExpression() const { return *expr; }
         const auto &GetLeft() const { return left; }
@@ -1067,7 +1067,7 @@ namespace Parsing
             return type->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetExpression() const { return *LHS; }
         const auto &GetKeyword() const { return keyword; }
@@ -1078,7 +1078,7 @@ namespace Parsing
     {
     public:
         virtual ~StatementSyntax() {}
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const = 0;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const = 0;
     };
 
     using Statement = StatementSyntax *;
@@ -1227,7 +1227,7 @@ namespace Parsing
             }
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetGetArrow() const { return getArrow; }
         const auto &GetGetStatement() const { return *get; }
@@ -1274,7 +1274,7 @@ namespace Parsing
             return right.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetLeft() const { return left; }
         const auto &GetGet() const { return get; }
@@ -1323,7 +1323,7 @@ namespace Parsing
             return close.GetStart();
         }
 
-        virtual CodeValue *CodeGen(CodeGeneration &gen) const override
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override
         {
             bool used = gen.IsUsed(CodeGeneration::Using::NoBlock);
             if (used)
@@ -1331,10 +1331,10 @@ namespace Parsing
             else
                 gen.NewScope<ScopeNode>();
 
-            CodeValue *ret = nullptr;
+            std::shared_ptr<CodeValue> ret;
             for (auto s : statements)
             {
-                ret = (CodeValue *)s->CodeGen(gen);
+                ret = s->CodeGen(gen);
                 if (static_cast<SyntaxNode *>(s)->GetType() == SyntaxType::ReturnStatement &&
                     gen.GetInsertPoint()->GetType() == SymbolNodeType::FunctionNode)
                     break;
@@ -1408,7 +1408,7 @@ namespace Parsing
             return body->GetStart();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
         virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
@@ -1469,7 +1469,7 @@ namespace Parsing
             return body->GetStart();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
         virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
@@ -1509,7 +1509,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override
         {
             return expression->CodeGen(gen);
         }
@@ -1576,7 +1576,7 @@ namespace Parsing
             return initializer->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
@@ -1649,7 +1649,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
         virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
@@ -1719,7 +1719,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetLeftParen() const { return left; }
         const auto &GetParameters() const { return parameters; }
@@ -1764,7 +1764,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override
         {
             return body->CodeGen(gen);
         }
@@ -1820,7 +1820,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
@@ -1873,7 +1873,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
@@ -1913,7 +1913,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
@@ -1952,7 +1952,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
@@ -2000,7 +2000,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
         virtual void PreCodeGen(CodeGeneration &gen) const override;
         const auto &GetKeyword() const { return keyword; }
         const auto &GetTemplateType() const { return *templateType; }
@@ -2055,7 +2055,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
         virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
@@ -2096,7 +2096,7 @@ namespace Parsing
             return identifier.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetIdentifier() const { return identifier; }
     };
@@ -2141,7 +2141,7 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
@@ -2202,7 +2202,7 @@ namespace Parsing
                 return identifier.GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
@@ -2256,7 +2256,7 @@ namespace Parsing
             return stmt->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const {}
 
         const auto &GetExpression() const { return *expr; }
         const auto &GetArrow() const { return arrow; }
@@ -2307,7 +2307,7 @@ namespace Parsing
             return entries->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override {}
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expr; }
@@ -2349,7 +2349,7 @@ namespace Parsing
             return statement->GetEnd();
         }
 
-        virtual const CodeValue *CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetStatement() const { return *statement; }
@@ -2377,7 +2377,7 @@ namespace Parsing
         Parser(const TokenList &tokenList, const FileIterator &fptr) : tokenList{tokenList}, fptr{fptr}, tokenIterator{nullptr} { globalFptr = (FileIterator *)&fptr; }
         ~Parser() {}
 
-        ModuleUnit *ParseModule(const std::string &moduleName);
+        std::unique_ptr<ModuleUnit> ParseModule(const std::string &moduleName);
 
         Statement ParseStatement();
         Statement ParseTopLevelScopeStatement();

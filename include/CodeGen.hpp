@@ -8,6 +8,8 @@
 #include <map>
 #include <string>
 #include <bitset>
+#include <memory>
+#include <iostream>
 
 // std::string gen_random(const int len);
 // #include <Parser.hpp>
@@ -16,6 +18,9 @@ namespace Parsing
     class SyntaxNode;
 } // namespace Parsing
 
+extern size_t numCodeType;
+extern size_t numCodeValue;
+
 struct CodeType
 {
     llvm::Type *type;
@@ -23,6 +28,14 @@ struct CodeType
 
     CodeType(llvm::Type *type, bool isSigned = false) : type{type}, isSigned{isSigned}
     {
+        numCodeType++;
+    }
+
+    ~CodeType()
+    {
+        // type->print(llvm::outs());
+        // llvm::outs() << "\n";
+        numCodeType--;
     }
 
     bool operator==(const CodeType &right) const
@@ -39,10 +52,18 @@ struct CodeType
 struct CodeValue
 {
     llvm::Value *value;
-    CodeType *type;
+    std::shared_ptr<CodeType> type;
 
-    CodeValue(llvm::Value *value, CodeType *type) : value{value}, type{type}
+    CodeValue(llvm::Value *value, std::shared_ptr<CodeType> type) : value{value}, type{std::move(type)}
     {
+        numCodeValue++;
+    }
+
+    ~CodeValue()
+    {
+        // value->print(llvm::outs());
+        // llvm::outs() << "\n";
+        numCodeValue--;
     }
 };
 
@@ -52,7 +73,7 @@ private:
     llvm::AllocaInst *retLoc;
     llvm::BasicBlock *retLabel;
     int numRets = 0;
-    std::vector<CodeType *> parameters;
+    std::vector<std::shared_ptr<CodeType>> parameters;
     bool isMember;
 
 public:
@@ -61,7 +82,13 @@ public:
     llvm::BranchInst *lastbr = nullptr;
 
 public:
-    FunctionCodeValue(llvm::Value *value, CodeType *type, std::vector<CodeType *> parameters, bool isMember, llvm::AllocaInst *retLoc = nullptr, llvm::BasicBlock *retLabel = nullptr) : CodeValue(value, type), retLoc{retLoc}, retLabel{retLabel}, parameters{parameters}, isMember{isMember}
+    FunctionCodeValue(
+        llvm::Function *value,
+        std::shared_ptr<CodeType> type,
+        std::vector<std::shared_ptr<CodeType>> parameters,
+        bool isMember,
+        llvm::AllocaInst *retLoc = nullptr,
+        llvm::BasicBlock *retLabel = nullptr) : CodeValue(value, std::move(type)), retLoc{retLoc}, retLabel{retLabel}, parameters{parameters}, isMember{isMember}
     {
     }
 
@@ -91,10 +118,6 @@ struct TemplateCodeValue : public CodeType
 {
     TemplateNode &node;
 
-    TemplateCodeValue(CodeType &type, TemplateNode &node) : CodeType(type), node{node}
-    {
-    }
-
     TemplateCodeValue(llvm::Type *type, TemplateNode &node) : CodeType(type), node{node}
     {
     }
@@ -116,10 +139,6 @@ class SpecNode;
 struct SpecCodeValue : public CodeType
 {
     SpecNode &node;
-
-    SpecCodeValue(CodeType &type, SpecNode &node) : CodeType(type), node{node}
-    {
-    }
 
     SpecCodeValue(llvm::Type *type, SpecNode &node) : CodeType(type), node{node}
     {
@@ -279,55 +298,54 @@ public:
 class FunctionNode : public SymbolNode
 {
 private:
-    CodeValue *function;
+    std::shared_ptr<FunctionCodeValue> function;
 
 public:
-    FunctionNode(SymbolNode *parent, CodeValue *function) : SymbolNode{parent}, function{function} {}
+    FunctionNode(SymbolNode *parent, std::shared_ptr<FunctionCodeValue> function) : SymbolNode{parent}, function{std::move(function)} {}
     virtual ~FunctionNode() {}
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::FunctionNode; }
 
-    const auto GetFunction() const { return static_cast<FunctionCodeValue *>(function); }
+    std::shared_ptr<FunctionCodeValue> GetFunction() const { return function; }
 };
 
 class VariableNode : public SymbolNode
 {
 private:
-    const CodeValue *variable;
+    std::shared_ptr<CodeValue> variable;
 
 public:
-    VariableNode(SymbolNode *parent, const CodeValue *variable) : SymbolNode{parent}, variable{variable} {}
+    VariableNode(SymbolNode *parent, std::shared_ptr<CodeValue> variable) : SymbolNode{parent}, variable{std::move(variable)} {}
     virtual ~VariableNode() {}
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::VariableNode; }
 
-    const auto GetVariable() const { return variable; }
+    std::shared_ptr<CodeValue> GetVariable() const { return variable; }
 };
 
-class ActionNode : public SymbolNode
-{
-private:
-    std::string type;
+// class ActionNode : public SymbolNode
+// {
+// private:
+//     std::string type;
 
-public:
-    ActionNode(SymbolNode *parent, const std::string &type) : SymbolNode{parent}, type{type} {}
-    virtual ~ActionNode() {}
+// public:
+//     ActionNode(SymbolNode *parent, const std::string &type) : SymbolNode{parent}, type{type} {}
+//     virtual ~ActionNode() {}
 
-    const virtual SymbolNodeType GetType() const override { return SymbolNodeType::ActionNode; }
-    const auto &GetTypename() const { return type; }
-};
+//     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::ActionNode; }
+//     const auto &GetTypename() const { return type; }
+// };
 
 class TemplateNode : public SymbolNode
 {
 private:
-    TemplateCodeValue *templ;
+    std::shared_ptr<TemplateCodeValue> templ;
     std::vector<llvm::Type *> members;
 
 public:
-    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{new TemplateCodeValue(templ, *this)} {}
+    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{std::make_shared<TemplateCodeValue>(templ, *this)} {}
     virtual ~TemplateNode()
     {
-        delete templ;
     }
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::TemplateNode; }
@@ -399,7 +417,7 @@ public:
     };
 
 public:
-    static SymbolNode rootSymbols;
+    SymbolNode rootSymbols{nullptr};
 
 private:
     llvm::LLVMContext context;
@@ -407,17 +425,24 @@ private:
     llvm::Module *module;
 
     SymbolNode *insertPoint = nullptr;
-    FunctionCodeValue *currentFunction = nullptr;
-    CodeValue *currentVar = nullptr;
-    CodeType *currentType = nullptr;
-    CodeValue *dotExprBase = nullptr;
+    std::shared_ptr<FunctionCodeValue> currentFunction;
+    std::shared_ptr<CodeValue> currentVar;
+    std::shared_ptr<CodeType> currentType;
+    std::shared_ptr<CodeValue> dotExprBase;
 
     std::bitset<64> usings;
+
+    uint8_t preCodeGenPass = 0;
 
 public:
     CodeGeneration(const std::string &moduleName) : builder{context}, module{new llvm::Module(moduleName, context)}
     {
-        insertPoint = rootSymbols.AddChild<ModuleNode>(moduleName);
+        insertPoint = &rootSymbols;
+        NewScope<ModuleNode>(moduleName);
+    }
+
+    ~CodeGeneration()
+    {
     }
 
 public:
@@ -425,12 +450,12 @@ public:
     auto &GetBuilder() { return builder; }
     auto &GetModule() const { return *module; }
 
-    CodeType *LiteralType(const Parsing::SyntaxNode &node);
-    CodeType *TypeType(const Parsing::SyntaxNode &node);
-    const CodeValue *Cast(const CodeValue *value, CodeType *toType, bool implicit = true);
+    std::shared_ptr<CodeType> LiteralType(const Parsing::SyntaxNode &node);
+    std::shared_ptr<CodeType> TypeType(const Parsing::SyntaxNode &node);
+    std::shared_ptr<CodeValue> Cast(std::shared_ptr<CodeValue> value, std::shared_ptr<CodeType> toType, bool implicit = true);
     static uint8_t GetNumBits(uint64_t val);
-    TemplateCodeValue *TypeFromObjectInitializer(const Parsing::SyntaxNode &object);
-    CodeValue *FollowDotChain(const Parsing::SyntaxNode &);
+    std::shared_ptr<TemplateCodeValue> TypeFromObjectInitializer(const Parsing::SyntaxNode &object);
+    std::shared_ptr<CodeValue> FollowDotChain(const Parsing::SyntaxNode &);
 
     void GenerateMain();
 
@@ -491,7 +516,7 @@ public:
         return currentFunction;
     }
 
-    void SetCurrentFunction(FunctionCodeValue *func)
+    void SetCurrentFunction(std::shared_ptr<FunctionCodeValue> func)
     {
         currentFunction = func;
     }
@@ -501,7 +526,7 @@ public:
         return currentVar;
     }
 
-    void SetCurrentVar(CodeValue *var)
+    void SetCurrentVar(std::shared_ptr<CodeValue> var)
     {
         currentVar = var;
     }
@@ -511,7 +536,7 @@ public:
         return currentType;
     }
 
-    void SetCurrentType(CodeType *var)
+    void SetCurrentType(std::shared_ptr<CodeType> var)
     {
         currentType = var;
     }
@@ -521,10 +546,13 @@ public:
         return dotExprBase;
     }
 
-    void SetDotExprBase(CodeValue *var)
+    void SetDotExprBase(std::shared_ptr<CodeValue> var)
     {
         dotExprBase = var;
     }
+
+    const auto GetPreCodeGenPass() { return preCodeGenPass; }
+    void SetPreCodeGenPass(uint8_t pass) { preCodeGenPass = pass; }
 
     llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type, const std::string &VarName, llvm::Function *func = nullptr)
     {
@@ -539,7 +567,7 @@ public:
         std::string s = std::to_string(name.size()) + name;
         for (auto p = insertPoint; p != nullptr && p->GetParent() != nullptr;)
         {
-            std::string nname = p->GetType() == SymbolNodeType::ActionNode ? p->As<ActionNode>().GetTypename() : p->GetParent()->findSymbol(p);
+            std::string nname = p->GetParent()->findSymbol(p);
             s = std::to_string(nname.size()) + nname + s;
             p = p->GetParent();
         }

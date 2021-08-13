@@ -7,6 +7,7 @@
 #include <codecvt>
 #include <Errors.hpp>
 #include <stdexcept>
+#include <memory>
 
 #include <ModuleUnit.hpp>
 
@@ -28,7 +29,7 @@ namespace Parsing
     FileIterator *Parser::globalFptr = nullptr;
     ErrorList Parser::errors;
 
-    ModuleUnit *Parser::ParseModule(const std::string &moduleName)
+    std::unique_ptr<ModuleUnit> Parser::ParseModule(const std::string &moduleName)
     {
         tokenIterator = tokenList.begin();
         const Token &start = tokenIterator;
@@ -92,7 +93,7 @@ namespace Parsing
             }
         }
 
-        auto module = new ModuleUnit(moduleName, start, statements, tokenIterator);
+        auto module = std::make_unique<ModuleUnit>(moduleName, start, statements, tokenIterator);
         PrintNode(module->GetSyntaxTree());
         return module;
     }

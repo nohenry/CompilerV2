@@ -34,23 +34,23 @@
 
 using namespace Parsing;
 
-SymbolNode CodeGeneration::rootSymbols(nullptr);
+// SymbolNode CodeGeneration::rootSymbols(nullptr);
 
-CodeType *CodeGeneration::LiteralType(const SyntaxNode &node)
+std::shared_ptr<CodeType> CodeGeneration::LiteralType(const SyntaxNode &node)
 {
     switch (node.GetType())
     {
     case SyntaxType::Integer:
     {
         auto value = node.As<IntegerSyntax>().GetValue();
-        return new CodeType(llvm::IntegerType::get(context, GetNumBits(value)));
+        return std::make_shared<CodeType>(llvm::IntegerType::get(context, GetNumBits(value)));
     }
     case SyntaxType::Floating:
-        return new CodeType(llvm::Type::getDoubleTy(context));
+        return std::make_shared<CodeType>(llvm::Type::getDoubleTy(context));
     case SyntaxType::Boolean:
-        return new CodeType(llvm::Type::getInt1Ty(context));
+        return std::make_shared<CodeType>(llvm::Type::getInt1Ty(context));
     case SyntaxType::String:
-        return new CodeType(llvm::ArrayType::get(llvm::Type::getInt8Ty(context), node.As<StringSyntax>().GetValue().size() + 1));
+        return std::make_shared<CodeType>(llvm::ArrayType::get(llvm::Type::getInt8Ty(context), node.As<StringSyntax>().GetValue().size() + 1));
     case SyntaxType::ArrayLiteral:
     {
         auto arr = node.As<ArrayLiteral>();
@@ -58,11 +58,11 @@ CodeType *CodeGeneration::LiteralType(const SyntaxNode &node)
         if (arr.GetValues().size() > 0)
         {
             auto type = LiteralType(arr.GetValues()[0]->GetExpression());
-            return new CodeType(llvm::ArrayType::get(type->type, node.As<ArrayLiteral>().GetValues().size() + 1));
+            return std::make_shared<CodeType>(llvm::ArrayType::get(type->type, node.As<ArrayLiteral>().GetValues().size() + 1));
         }
         else
         {
-            return new CodeType(llvm::ArrayType::get(llvm::Type::getInt8Ty(context), node.As<ArrayLiteral>().GetValues().size() + 1));
+            return std::make_shared<CodeType>(llvm::ArrayType::get(llvm::Type::getInt8Ty(context), node.As<ArrayLiteral>().GetValues().size() + 1));
         }
     }
     default:
@@ -70,7 +70,7 @@ CodeType *CodeGeneration::LiteralType(const SyntaxNode &node)
     }
 }
 
-CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
+std::shared_ptr<CodeType> CodeGeneration::TypeType(const SyntaxNode &node)
 {
     switch (node.GetType())
     {
@@ -80,13 +80,13 @@ CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
         switch (type.type)
         {
         case TokenType::Int:
-            return new CodeType(llvm::IntegerType::get(context, type.ivalue == 0 ? 32 : type.ivalue), true);
+            return std::make_shared<CodeType>(llvm::IntegerType::get(context, type.ivalue == 0 ? 32 : type.ivalue), true);
         case TokenType::Uint:
-            return new CodeType(llvm::IntegerType::get(context, type.ivalue == 0 ? 32 : type.ivalue), false);
+            return std::make_shared<CodeType>(llvm::IntegerType::get(context, type.ivalue == 0 ? 32 : type.ivalue), false);
         case TokenType::Float:
-            return new CodeType(llvm::IntegerType::getDoubleTy(context), false);
+            return std::make_shared<CodeType>(llvm::IntegerType::getDoubleTy(context), false);
         case TokenType::Bool:
-            return new CodeType(llvm::Type::getInt1Ty(context), false);
+            return std::make_shared<CodeType>(llvm::Type::getInt1Ty(context), false);
 
         default:
             break;
@@ -99,11 +99,14 @@ CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
             switch (sym->GetType())
             {
             case SymbolNodeType::TemplateNode:
-                return new TemplateCodeValue(static_cast<llvm::StructType *>(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type), *dynamic_cast<TemplateNode *>(sym));
+                return dynamic_cast<TemplateNode *>(sym)->GetTemplate();
+                // return std::make_shared<TemplateCodeValue>(static_cast<llvm::StructType *>(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type), *dynamic_cast<TemplateNode *>(sym));
             case SymbolNodeType::TypeAliasNode:
-                return new TemplateCodeValue(static_cast<llvm::StructType *>(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type), *dynamic_cast<TemplateNode *>(sym));
+                return dynamic_cast<TemplateNode *>(sym)->GetTemplate();
+                // return std::make_shared<TemplateCodeValue>(static_cast<llvm::StructType *>(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type), *dynamic_cast<TemplateNode *>(sym));
             case SymbolNodeType::SpecNode:
-                return new SpecCodeValue(nullptr, *dynamic_cast<SpecNode *>(sym));
+                // return dynamic_cast<SpecNode *>(sym).
+                return std::make_shared<SpecCodeValue>(nullptr, *dynamic_cast<SpecNode *>(sym));
             default:
                 return nullptr;
             }
@@ -116,7 +119,7 @@ CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
         auto type = TypeType(arr.GetArrayType());
         auto &size = arr.GetArraySize();
         if (size.GetType() == SyntaxType::Integer)
-            return new CodeType(llvm::ArrayType::get(type->type, size.As<IntegerSyntax>().GetValue()));
+            return std::make_shared<CodeType>(llvm::ArrayType::get(type->type, size.As<IntegerSyntax>().GetValue()));
         else
             return nullptr;
     }
@@ -124,7 +127,7 @@ CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
     {
         auto arr = node.As<ReferenceType>();
         auto type = TypeType(arr.GetReferenceType());
-        return new CodeType(llvm::PointerType::get(type->type, 0));
+        return std::make_shared<CodeType>(llvm::PointerType::get(type->type, 0));
     }
     case SyntaxType::FunctionType:
     {
@@ -134,9 +137,9 @@ CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
         for (auto a : arr.GetParameters())
             parameters.push_back(TypeType(*a)->type);
         if (type)
-            return new CodeType(llvm::FunctionType::get(type->type, parameters, false)->getPointerTo());
+            return std::make_shared<CodeType>(llvm::FunctionType::get(type->type, parameters, false)->getPointerTo());
         else
-            return new CodeType(llvm::FunctionType::get(llvm::Type::getVoidTy(context), parameters, false)->getPointerTo());
+            return std::make_shared<CodeType>(llvm::FunctionType::get(llvm::Type::getVoidTy(context), parameters, false)->getPointerTo());
     }
     default:
         return nullptr;
@@ -144,28 +147,28 @@ CodeType *CodeGeneration::TypeType(const SyntaxNode &node)
     }
 }
 
-const CodeValue *CodeGeneration::Cast(const CodeValue *value, CodeType *toType, bool implicit)
+std::shared_ptr<CodeValue> CodeGeneration::Cast(std::shared_ptr<CodeValue> value, std::shared_ptr<CodeType> toType, bool implicit)
 {
     auto vt = value->type->type->getTypeID();
     auto tt = toType->type->getTypeID();
     if (vt == tt && vt == llvm::Type::FloatTyID)
-        return value;
+        return std::move(value);
     else if (vt == tt && vt == llvm::Type::DoubleTyID)
-        return value;
+        return std::move(value);
     else if (value->type->type == toType->type)
-        return value;
+        return std::move(value);
     else if ((vt == llvm::Type::FloatTyID || vt == llvm::Type::DoubleTyID) && (tt == llvm::Type::FloatTyID || tt == llvm::Type::DoubleTyID))
     {
-        return new CodeValue(builder.CreateFPCast(value->value, toType->type), toType);
+        return std::make_shared<CodeValue>(builder.CreateFPCast(value->value, toType->type), toType);
     }
     else if ((vt == llvm::Type::FloatTyID || vt == llvm::Type::DoubleTyID) && (tt == llvm::Type::IntegerTyID))
     {
         if (!implicit)
         {
             if (toType->isSigned)
-                return new CodeValue(builder.CreateFPToSI(value->value, toType->type), toType);
+                return std::make_shared<CodeValue>(builder.CreateFPToSI(value->value, toType->type), toType);
             else
-                return new CodeValue(builder.CreateFPToUI(value->value, toType->type), toType);
+                return std::make_shared<CodeValue>(builder.CreateFPToUI(value->value, toType->type), toType);
         }
         else
         {
@@ -176,14 +179,14 @@ const CodeValue *CodeGeneration::Cast(const CodeValue *value, CodeType *toType, 
     else if ((tt == llvm::Type::FloatTyID || tt == llvm::Type::DoubleTyID) && (vt == llvm::Type::IntegerTyID))
     {
         if (toType->isSigned)
-            return new CodeValue(builder.CreateSIToFP(value->value, toType->type), toType);
+            return std::make_shared<CodeValue>(builder.CreateSIToFP(value->value, toType->type), toType);
         else
-            return new CodeValue(builder.CreateUIToFP(value->value, toType->type), toType);
+            return std::make_shared<CodeValue>(builder.CreateUIToFP(value->value, toType->type), toType);
     }
     else if (value->type->type != toType->type || value->type->isSigned != toType->isSigned)
     {
         auto val = builder.CreateIntCast(value->value, toType->type, toType->isSigned);
-        return new CodeValue(val, toType);
+        return std::make_shared<CodeValue>(val, toType);
     }
     return nullptr;
 }
@@ -192,7 +195,7 @@ const CodeValue *CodeGeneration::Cast(const CodeValue *value, CodeType *toType, 
 // {
 //     if (value->getValueID() == llvm::Instruction::Alloca + llvm::Value::InstructionVal && initializer->GetType() == Parsing::SyntaxType::IdentifierExpression) // If the initializer is a variable, load it and store it
 //     {
-//         auto load = new CodeValue(gen.GetBuilder().CreateLoad(init->value), init->type);
+//         auto load = std::make_shared<CodeValue>(gen.GetBuilder().CreateLoad(init->value), init->type);
 //     }
 // }
 
@@ -208,7 +211,7 @@ uint8_t CodeGeneration::GetNumBits(uint64_t val)
         return 64;
 }
 
-TemplateCodeValue *CodeGeneration::TypeFromObjectInitializer(const SyntaxNode &object)
+std::shared_ptr<TemplateCodeValue> CodeGeneration::TypeFromObjectInitializer(const SyntaxNode &object)
 {
     if (object.GetType() == SyntaxType::ObjectInitializer)
     {
@@ -223,7 +226,7 @@ TemplateCodeValue *CodeGeneration::TypeFromObjectInitializer(const SyntaxNode &o
             {
                 auto value = TypeFromObjectInitializer(val->GetValue());
                 types.push_back(value->type);
-                node->AddChild<VariableNode>(val->GetKey().raw, new CodeValue(nullptr, value));
+                node->AddChild<VariableNode>(val->GetKey().raw, std::make_shared<CodeValue>(nullptr, value));
             }
             else
             {
@@ -233,12 +236,12 @@ TemplateCodeValue *CodeGeneration::TypeFromObjectInitializer(const SyntaxNode &o
             }
         }
         structType->setBody(types);
-        return new TemplateCodeValue(structType, *node);
+        return std::make_shared<TemplateCodeValue>(structType, *node);
     }
     return nullptr;
 }
 
-CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
+std::shared_ptr<CodeValue> CodeGeneration::FollowDotChain(const SyntaxNode &node)
 {
 
     if (node.GetType() != SyntaxType::BinaryExpression)
@@ -254,14 +257,14 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
         bool isReference = IsUsed(Using::Reference);
         Use(Using::Reference);
 
-        auto left = (CodeValue *)bin.GetLHS().CodeGen(*this);
+        auto left = bin.GetLHS().CodeGen(*this);
 
         if (!isReference)
             UnUse(Using::Reference);
 
         if (left->value == nullptr)
         {
-            if (auto templ = static_cast<TemplateCodeValue *>(left->type))
+            if (auto templ = std::static_pointer_cast<TemplateCodeValue>(left->type))
             {
                 const auto &templNode = templ->GetNode();
 
@@ -272,7 +275,7 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
                     {
                         if (!found->second->As<FunctionNode>().GetFunction()->IsMember())
                         {
-                            return found->second->As<FunctionNode>().GetFunction();
+                            return std::static_pointer_cast<CodeValue>(found->second->As<FunctionNode>().GetFunction());
                         }
                         else
                         {
@@ -292,11 +295,11 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
             {
                 auto loaded = builder.CreateLoad(left->type->type, left->value);
                 left->type->type = left->type->type->getPointerElementType();
-                left = new CodeValue(loaded, left->type);
+                left = std::make_shared<CodeValue>(loaded, left->type);
             }
-            dotExprBase = (CodeValue *)left;
+            dotExprBase = left;
 
-            if (auto templ = static_cast<TemplateCodeValue *>(left->type))
+            if (auto templ = std::static_pointer_cast<TemplateCodeValue>(left->type))
             {
                 const auto &templNode = templ->GetNode();
 
@@ -305,17 +308,16 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
                 {
                     if (found->second->GetType() == SymbolNodeType::FunctionNode)
                     {
-                        return found->second->As<FunctionNode>().GetFunction();
+                        return std::static_pointer_cast<CodeValue>(found->second->As<FunctionNode>().GetFunction());
                     }
                     else
                     {
-                        auto found = templNode.findSymbol(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
                         if (IsUsed(CodeGeneration::Using::Reference)) // Return reference and don't load
                         {
                             auto index = templNode.IndexOf(found);
                             auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
-                            auto value = new CodeValue(gep, found->second->As<VariableNode>().GetVariable()->type);
+                            auto value = std::make_shared<CodeValue>(gep, found->second->As<VariableNode>().GetVariable()->type);
                             // value->type->type = gep->getType();
                             return value;
                         }
@@ -325,7 +327,7 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
                             auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
                             auto load = builder.CreateLoad(templ->type, gep);
-                            auto value = new CodeValue(load, found->second->As<VariableNode>().GetVariable()->type);
+                            auto value = std::make_shared<CodeValue>(load, found->second->As<VariableNode>().GetVariable()->type);
                             value->type->type = load->getType();
                             return value;
                         }
@@ -348,7 +350,7 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
         if (!isReference)
             UnUse(Using::Reference);
 
-        if (auto templ = static_cast<TemplateCodeValue *>(left->type))
+        if (auto templ = std::static_pointer_cast<TemplateCodeValue>(left->type))
         {
             const auto &templNode = templ->GetNode();
             auto found = templNode.findSymbol(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
@@ -356,7 +358,7 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
             {
                 if (found->second->GetType() == SymbolNodeType::FunctionNode)
                 {
-                    return found->second->As<FunctionNode>().GetFunction();
+                    return std::static_pointer_cast<CodeValue>(found->second->As<FunctionNode>().GetFunction());
                 }
                 else
                 {
@@ -370,7 +372,7 @@ CodeValue *CodeGeneration::FollowDotChain(const SyntaxNode &node)
                         auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
                         auto load = builder.CreateLoad(templ->type, gep);
-                        auto value = new CodeValue(load, found->second->As<VariableNode>().GetVariable()->type);
+                        auto value = std::make_shared<CodeValue>(load, found->second->As<VariableNode>().GetVariable()->type);
                         value->type->type = load->getType();
                         return value;
                     }
@@ -406,7 +408,7 @@ void CodeGeneration::GenerateMain()
 
 namespace Parsing
 {
-    const CodeValue *VariableDeclerationStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> VariableDeclerationStatement::CodeGen(CodeGeneration &gen) const
     {
         if (initializer && initializer->GetType() == SyntaxType::TemplateInitializer)
         {
@@ -421,7 +423,7 @@ namespace Parsing
                 {
                     auto inst = gen.CreateEntryBlockAlloca(templ.GetTemplate()->type, identifier.raw); // Allocate the variable on the stack
 
-                    auto varValue = new CodeValue(inst, templ.GetTemplate());
+                    auto varValue = std::make_shared<CodeValue>(inst, templ.GetTemplate());
                     gen.SetCurrentVar(varValue);
                     initializer->CodeGen(gen);
 
@@ -446,7 +448,7 @@ namespace Parsing
                     auto type = gen.TypeFromObjectInitializer(*initializer);
                     auto inst = gen.CreateEntryBlockAlloca(type->type, identifier.raw); // Allocate the variable on the stack
 
-                    auto varValue = new CodeValue(inst, type);
+                    auto varValue = std::make_shared<CodeValue>(inst, type);
                     gen.SetCurrentVar(varValue);
 
                     initializer->CodeGen(gen);
@@ -464,7 +466,7 @@ namespace Parsing
                 {
                     auto inst = gen.CreateEntryBlockAlloca(gen.TypeType(*this->type)->type, identifier.raw); // Allocate the variable on the stack
 
-                    auto varValue = new CodeValue(inst, gen.TypeType(*this->type));
+                    auto varValue = std::make_shared<CodeValue>(inst, gen.TypeType(*this->type));
                     gen.SetCurrentVar(varValue);
 
                     initializer->CodeGen(gen);
@@ -478,7 +480,7 @@ namespace Parsing
         else
         {
             auto init = initializer ? initializer->CodeGen(gen) : nullptr;
-            CodeType *type = nullptr;
+            std::shared_ptr<CodeType> type;
             if (initializer && !this->type)
                 type = init->type;
             else if (this->type)
@@ -499,7 +501,7 @@ namespace Parsing
                         llvm::Align AllocaAlign = DL.getPrefTypeAlign(type->type);
                         global->setAlignment(AllocaAlign);
 
-                        auto varValue = new CodeValue(global, type);
+                        auto varValue = std::make_shared<CodeValue>(global, type);
                         gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue);
                     }
                     else
@@ -516,7 +518,7 @@ namespace Parsing
                         llvm::Align AllocaAlign = DL.getPrefTypeAlign(type->type);
                         global->setAlignment(AllocaAlign);
 
-                        auto varValue = new CodeValue(global, type);
+                        auto varValue = std::make_shared<CodeValue>(global, type);
                         gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue);
                     }
                     else
@@ -532,16 +534,14 @@ namespace Parsing
                     if (init)
                     {
 
-                        CodeValue *varValue;
+                        std::shared_ptr<CodeValue> varValue;
                         if (type) // If type is specified cast the value to the type
                         {
                             auto casted = gen.Cast(init, type);
-                            varValue = new CodeValue(casted->value, type);
-                            if (casted != init)
-                                delete casted;
+                            varValue = std::make_shared<CodeValue>(casted->value, type);
                         }
                         else
-                            varValue = new CodeValue(init->value, type);
+                            varValue = std::make_shared<CodeValue>(init->value, type);
 
                         gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
                         return varValue;
@@ -562,14 +562,12 @@ namespace Parsing
                         {
                             auto casted = gen.Cast(init, type);
                             gen.GetBuilder().CreateStore(casted->value, inst);
-                            if (casted != init)
-                                delete casted;
                         }
                         else
                             gen.GetBuilder().CreateStore(init->value, inst);
                     }
 
-                    auto varValue = new CodeValue(inst, type);
+                    auto varValue = std::make_shared<CodeValue>(inst, type);
                     gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
                     return varValue;
                 }
@@ -580,7 +578,7 @@ namespace Parsing
 
                 tn.AddMember(type->type);
 
-                auto val = new CodeValue(nullptr, type);
+                auto val = std::make_shared<CodeValue>(nullptr, type);
                 gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, val);
                 return val;
             }
@@ -589,7 +587,7 @@ namespace Parsing
         return nullptr;
     }
 
-    const CodeValue *BinaryExpression::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> BinaryExpression::CodeGen(CodeGeneration &gen) const
     {
         if (op.type == TokenType::Dot)
             return gen.FollowDotChain(*this);
@@ -605,7 +603,7 @@ namespace Parsing
         auto right = RHS->CodeGen(gen);
         if (left && right && (left->type->type == right->type->type || (left->type->type->getTypeID() == llvm::Type::IntegerTyID && right->type->type->getTypeID() == llvm::Type::IntegerTyID)))
         {
-            auto ret = new CodeValue(nullptr, new CodeType(*left->type));
+            auto ret = std::make_shared<CodeValue>(nullptr, std::make_shared<CodeType>(*left->type));
             switch (op.type)
             {
             case TokenType::Plus:
@@ -978,9 +976,7 @@ namespace Parsing
             case TokenType::Equal:
             {
                 auto val = gen.Cast(right, left->type);
-
                 ret->value = gen.GetBuilder().CreateStore(val->value, left->value);
-                delete val;
                 break;
             }
 
@@ -1035,14 +1031,14 @@ namespace Parsing
         }
     }
 
-    const CodeValue *UnaryExpression::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> UnaryExpression::CodeGen(CodeGeneration &gen) const
     {
         if (op.type == TokenType::Ampersand)
             gen.Use(CodeGeneration::Using::Reference);
         auto expr = expression->CodeGen(gen);
         if (op.type == TokenType::Ampersand)
             gen.UnUse(CodeGeneration::Using::Reference);
-        auto ret = new CodeValue(nullptr, new CodeType(*expr->type));
+        auto ret = std::make_shared<CodeValue>(nullptr, std::make_shared<CodeType>(*expr->type));
         switch (op.type)
         {
         case TokenType::Minus:
@@ -1156,11 +1152,11 @@ namespace Parsing
         return ret;
     }
 
-    const CodeValue *PostfixExpression::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> PostfixExpression::CodeGen(CodeGeneration &gen) const
     {
     }
 
-    const CodeValue *IdentifierExpression::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> IdentifierExpression::CodeGen(CodeGeneration &gen) const
     {
         const auto found = gen.FindSymbolInScope(identifierToken.raw);
         if (found != nullptr)
@@ -1177,7 +1173,7 @@ namespace Parsing
                 else
                 {
                     auto load = gen.GetBuilder().CreateLoad(f->type->type, f->value);
-                    auto value = new CodeValue(load, f->type);
+                    auto value = std::make_shared<CodeValue>(load, f->type);
                     value->type->type = load->getType();
                     return value;
                 }
@@ -1192,7 +1188,7 @@ namespace Parsing
             {
                 auto t = found->As<TemplateNode>().GetTemplate();
                 // f->type->type = f->value->getType();
-                return new CodeValue(nullptr, t);
+                return std::make_shared<CodeValue>(nullptr, t);
             }
             default:
                 break;
@@ -1202,9 +1198,9 @@ namespace Parsing
         return nullptr;
     }
 
-    const CodeValue *CallExpression::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> CallExpression::CodeGen(CodeGeneration &gen) const
     {
-        auto fnExpr = static_cast<const FunctionCodeValue *>(fn->CodeGen(gen));
+        auto fnExpr = std::static_pointer_cast<FunctionCodeValue>(fn->CodeGen(gen));
         if (fnExpr)
         {
             size_t argSize = arguments.size();
@@ -1235,25 +1231,23 @@ namespace Parsing
 
                 args.push_back(casted->value);
                 checkargs++;
-                delete val;
-                delete casted;
             }
             auto call = gen.GetBuilder().CreateCall(fnExpr->Function(), args);
-            return new CodeValue(call, fnExpr->type);
+            return std::make_shared<CodeValue>(call, fnExpr->type);
         }
         // TODO throw error function callee is not function type!
         return nullptr;
     }
 
-    const CodeValue *SubscriptExpression::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> SubscriptExpression::CodeGen(CodeGeneration &gen) const
     {
     }
 
-    const CodeValue *CastExpression::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> CastExpression::CodeGen(CodeGeneration &gen) const
     {
     }
 
-    const CodeValue *ArrayLiteral::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> ArrayLiteral::CodeGen(CodeGeneration &gen) const
     {
         auto type = static_cast<llvm::ArrayType *>(gen.LiteralType(*this)->type);
         std::vector<const llvm::Value *> vals;
@@ -1278,10 +1272,10 @@ namespace Parsing
 
         // auto variable = new llvm::AllocaInst(
         //     I, "array_size", funcEntry);
-        // return new CodeValue(llvm::makeArrayRef(vals), new CodeType(type));
+        // return std::make_shared<CodeValue>(llvm::makeArrayRef(vals), std::make_shared<CodeType>(type));
     }
 
-    const CodeValue *StringSyntax::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> StringSyntax::CodeGen(CodeGeneration &gen) const
     {
         auto type = gen.LiteralType(*this);
         std::vector<llvm::Constant *> vals;
@@ -1290,28 +1284,28 @@ namespace Parsing
             vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt8Ty(gen.GetContext()), c));
         }
         vals.push_back(llvm::ConstantInt::get(llvm::Type::getInt8Ty(gen.GetContext()), 0));
-        return new CodeValue(llvm::ConstantArray::get(static_cast<llvm::ArrayType *>(type->type), llvm::makeArrayRef(vals)), type);
+        return std::make_shared<CodeValue>(llvm::ConstantArray::get(static_cast<llvm::ArrayType *>(type->type), llvm::makeArrayRef(vals)), type);
     }
 
-    const CodeValue *BooleanSyntax::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> BooleanSyntax::CodeGen(CodeGeneration &gen) const
     {
         auto type = gen.LiteralType(*this);
-        return new CodeValue(llvm::ConstantInt::get(type->type, llvm::APInt(1, GetValue())), type);
+        return std::make_shared<CodeValue>(llvm::ConstantInt::get(type->type, llvm::APInt(1, GetValue())), type);
     }
 
-    const CodeValue *FloatingSyntax::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> FloatingSyntax::CodeGen(CodeGeneration &gen) const
     {
         auto type = gen.LiteralType(*this);
-        return new CodeValue(llvm::ConstantFP::get(type->type, llvm::APFloat(GetValue())), type);
+        return std::make_shared<CodeValue>(llvm::ConstantFP::get(type->type, llvm::APFloat(GetValue())), type);
     }
 
-    const CodeValue *IntegerSyntax::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> IntegerSyntax::CodeGen(CodeGeneration &gen) const
     {
         auto type = gen.LiteralType(*this);
-        return new CodeValue(llvm::ConstantInt::get(type->type, llvm::APInt(CodeGeneration::GetNumBits(GetValue()), GetValue())), type);
+        return std::make_shared<CodeValue>(llvm::ConstantInt::get(type->type, llvm::APInt(CodeGeneration::GetNumBits(GetValue()), GetValue())), type);
     }
 
-    const CodeValue *FunctionDeclerationStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> FunctionDeclerationStatement::CodeGen(CodeGeneration &gen) const
     {
         auto checkFunc = gen.GetModule().getFunction(gen.GenerateMangledName(identifier.raw));
         auto found = gen.GetInsertPoint()->findSymbol(identifier.raw);
@@ -1346,7 +1340,7 @@ namespace Parsing
             auto inst = gen.CreateEntryBlockAlloca(arg.getType(), this->parameters[index]->GetIdentifier().raw); // Allocate the variable on the stack
             gen.GetBuilder().CreateStore(&arg, inst);
 
-            auto varValue = new CodeValue(inst, funcVal->GetParameters()[index]);
+            auto varValue = std::make_shared<CodeValue>(inst, funcVal->GetParameters()[index]);
 
             gen.GetInsertPoint()->AddChild<VariableNode>(this->parameters[index++]->GetIdentifier().raw, varValue);
         }
@@ -1358,7 +1352,7 @@ namespace Parsing
         }
 
         gen.Use(CodeGeneration::Using::NoBlock);
-        const CodeValue *funcBody = body->CodeGen(gen);
+        std::shared_ptr<CodeValue> funcBody = body->CodeGen(gen);
 
         if (retType)
         {
@@ -1369,9 +1363,6 @@ namespace Parsing
             {
                 auto casted = gen.Cast(funcBody, funcVal->type);
                 gen.Return(casted->value);
-                // gen.GetBuilder().CreateRet(casted->value);
-                if (casted != funcBody)
-                    delete casted;
             }
 
             auto cfv = gen.GetCurrentFunction();
@@ -1421,42 +1412,49 @@ namespace Parsing
 
     void FunctionDeclerationStatement::PreCodeGen(CodeGeneration &gen) const
     {
-        CodeType *funcReturnType;
-        std::vector<CodeType *> funcParameters;
-        bool member = false;
-
-        funcReturnType = (retType == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*retType));
-        std::vector<llvm::Type *> parameters;
-
-        if (this->parameters.size() > 0 && this->parameters[0]->GetVariableType() == nullptr)
+        switch (gen.GetPreCodeGenPass())
         {
-            auto type = new TemplateCodeValue(*static_cast<TemplateCodeValue *>(gen.GetCurrentType()));
-            type->type = type->type->getPointerTo();
-            parameters.push_back(type->type);
-            funcParameters.push_back(type);
-            member = true;
-        }
+        case 1:
+        {
+            std::shared_ptr<CodeType> funcReturnType;
+            std::vector<std::shared_ptr<CodeType>> funcParameters;
+            bool member = false;
 
-        for (auto p : this->parameters)
-            if (p->GetVariableType())
+            funcReturnType = (retType == nullptr ? std::make_shared<CodeType>(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*retType));
+            std::vector<llvm::Type *> parameters;
+
+            if (this->parameters.size() > 0 && this->parameters[0]->GetVariableType() == nullptr)
             {
-                auto type = gen.TypeType(*p->GetVariableType());
+                auto type = std::make_shared<TemplateCodeValue>(*std::static_pointer_cast<TemplateCodeValue>(gen.GetCurrentType()));
+                type->type = type->type->getPointerTo();
                 parameters.push_back(type->type);
                 funcParameters.push_back(type);
+                member = true;
             }
-        auto functionType = llvm::FunctionType::get(funcReturnType->type, parameters, false);
-        auto checkFunc = llvm::Function::Create(functionType, gen.IsUsed(CodeGeneration::Using::Export) ? llvm::Function::ExternalLinkage : llvm::Function::PrivateLinkage, 0, gen.GenerateMangledName(identifier.raw), &(gen.GetModule()));
 
-        auto fValue = new FunctionCodeValue(checkFunc, funcReturnType, funcParameters, member, nullptr, nullptr);
+            for (auto p : this->parameters)
+                if (p->GetVariableType())
+                {
+                    auto type = gen.TypeType(*p->GetVariableType());
+                    parameters.push_back(type->type);
+                    funcParameters.push_back(type);
+                }
+            auto functionType = llvm::FunctionType::get(funcReturnType->type, parameters, false);
+            auto checkFunc = llvm::Function::Create(functionType, gen.IsUsed(CodeGeneration::Using::Export) ? llvm::Function::ExternalLinkage : llvm::Function::PrivateLinkage, 0, gen.GenerateMangledName(identifier.raw), &(gen.GetModule()));
 
-        auto fnScope = gen.NewScope<FunctionNode>(identifier.raw, fValue);
-        if (gen.IsUsed(CodeGeneration::Using::Export))
-            fnScope->Export();
+            auto fValue = std::make_shared<FunctionCodeValue>(checkFunc, funcReturnType, funcParameters, member, nullptr, nullptr);
 
-        gen.LastScope();
+            auto fnScope = gen.NewScope<FunctionNode>(identifier.raw, fValue);
+            if (gen.IsUsed(CodeGeneration::Using::Export))
+                fnScope->Export();
+
+            gen.LastScope();
+            break;
+        }
+        }
     }
 
-    const CodeValue *ExportDecleration::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> ExportDecleration::CodeGen(CodeGeneration &gen) const
     {
         gen.Use(CodeGeneration::Using::Export);
         auto stGen = statement->CodeGen(gen);
@@ -1464,7 +1462,7 @@ namespace Parsing
         return stGen;
     }
 
-    const CodeValue *ReturnStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> ReturnStatement::CodeGen(CodeGeneration &gen) const
     {
         auto retType = static_cast<llvm::Function *>(gen.GetCurrentFunction()->value)->getFunctionType()->getReturnType();
         if (retType->getTypeID() == llvm::Type::VoidTyID && expression != nullptr)
@@ -1474,9 +1472,8 @@ namespace Parsing
         else if (expression)
         {
             auto cgen = expression->CodeGen(gen);
-            auto hretType = new CodeType(retType);
+            auto hretType = std::make_shared<CodeType>(retType);
             auto expr = gen.Cast(cgen, hretType);
-            delete hretType;
 
             gen.Return(expr->value);
             return nullptr;
@@ -1493,7 +1490,7 @@ namespace Parsing
         }
     }
 
-    const CodeValue *IfStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> IfStatement::CodeGen(CodeGeneration &gen) const
     {
         auto currentBlock = gen.GetBuilder().GetInsertBlock();
         auto endBlock = llvm::BasicBlock::Create(gen.GetContext());
@@ -1537,17 +1534,15 @@ namespace Parsing
 
             gen.GetCurrentFunction()->Function()->getBasicBlockList().push_back(endBlock);
             gen.GetBuilder().SetInsertPoint(endBlock);
-            delete expr;
         }
         else
         {
-            delete expr;
             // TODO throw error if expression is not boolean
         }
         return nullptr;
     }
 
-    const CodeValue *TemplateStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> TemplateStatement::CodeGen(CodeGeneration &gen) const
     {
         // if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
         // {
@@ -1557,7 +1552,7 @@ namespace Parsing
         // auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
 
         // auto fnScope = gen.NewScope<TemplateNode>(identifier.raw, structType);
-        // auto tValue = new TemplateCodeValue(structType, *fnScope);
+        // auto tValue = std::make_shared<TemplateCodeValue>(structType, *fnScope);
 
         // if (gen.IsUsed(CodeGeneration::Using::Export))
         //     fnScope->Export();
@@ -1569,36 +1564,56 @@ namespace Parsing
         // structType->setBody(fnScope->GetMembers());
 
         // gen.LastScope();
-        // return new CodeValue(nullptr, tValue);
+        // return std::make_shared<CodeValue>(nullptr, tValue);
 
         return nullptr;
     }
 
     void TemplateStatement::PreCodeGen(CodeGeneration &gen) const
     {
-        if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
+        switch (gen.GetPreCodeGenPass())
         {
-            // TODO throw error template name already found
-            return;
+        case 0:
+        {
+            if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
+            {
+                // TODO throw error template name already found
+                return;
+            }
+            auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
+
+            auto fnScope = gen.NewScope<TemplateNode>(identifier.raw, structType);
+            gen.LastScope();
+            break;
         }
-        auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
+        case 1:
+        {
+            auto found = gen.GetInsertPoint()->findSymbol(identifier.raw);
+            if (found != gen.GetInsertPoint()->children.end())
+            {
+                gen.SetInsertPoint(found->second);
 
-        auto fnScope = gen.NewScope<TemplateNode>(identifier.raw, structType);
-        auto tValue = new TemplateCodeValue(structType, *fnScope);
+                auto &fnScope = found->second->As<TemplateNode>();
+                if (gen.IsUsed(CodeGeneration::Using::Export))
+                    fnScope.Export();
 
-        if (gen.IsUsed(CodeGeneration::Using::Export))
-            fnScope->Export();
+                gen.Use(CodeGeneration::Using::NoBlock);
 
-        gen.Use(CodeGeneration::Using::NoBlock);
+                body->CodeGen(gen);
 
-        body->CodeGen(gen);
+                fnScope.GetTemplate()->Template()->setBody(fnScope.GetMembers());
 
-        structType->setBody(fnScope->GetMembers());
+                gen.LastScope();
+            }
 
-        gen.LastScope();
+            break;
+        }
+        }
+
+        // auto tValue = std::make_shared<TemplateCodeValue>(structType, *fnScope);
     }
 
-    const CodeValue *TemplateInitializer::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> TemplateInitializer::CodeGen(CodeGeneration &gen) const
     {
         if (auto sym = gen.FindSymbolInScope<TemplateNode>(identifier.raw))
         {
@@ -1619,7 +1634,7 @@ namespace Parsing
                     int index = sym->IndexOf(found);
 
                     auto gep = gen.GetBuilder().CreateStructGEP(sym->GetTemplate()->type, strc, index);
-                    auto newVal = new CodeValue(gep, found->second->As<VariableNode>().GetVariable()->type);
+                    auto newVal = std::make_shared<CodeValue>(gep, found->second->As<VariableNode>().GetVariable()->type);
                     gen.SetCurrentVar(newVal);
                     auto init = v->GetValue().CodeGen(gen);
                     if (init)
@@ -1627,7 +1642,6 @@ namespace Parsing
                         auto val = gen.Cast(init, dynamic_cast<VariableNode *>(found->second)->GetVariable()->type);
                         gen.GetBuilder().CreateStore(val->value, gep);
                     }
-                    delete newVal;
                 }
                 else
                 {
@@ -1637,7 +1651,7 @@ namespace Parsing
             gen.SetCurrentVar(tempCurr);
             if (!gen.GetCurrentVar())
             {
-                return new CodeValue(gen.GetBuilder().CreateLoad(sym->GetTemplate()->type, strc), sym->GetTemplate());
+                return std::make_shared<CodeValue>(gen.GetBuilder().CreateLoad(sym->GetTemplate()->type, strc), sym->GetTemplate());
             }
             else
                 return nullptr;
@@ -1649,11 +1663,11 @@ namespace Parsing
         return nullptr;
     }
 
-    const CodeValue *ObjectInitializer::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> ObjectInitializer::CodeGen(CodeGeneration &gen) const
     {
         // if (gen.GetCurrentVar())
         // {
-        if (auto templ = static_cast<TemplateCodeValue *>(gen.GetCurrentVar()->type))
+        if (auto templ = std::static_pointer_cast<TemplateCodeValue>(gen.GetCurrentVar()->type))
         {
             auto tmpVal = gen.GetCurrentVar();
             auto &node = templ->GetNode();
@@ -1666,8 +1680,8 @@ namespace Parsing
                 {
                     int index = node.IndexOf(found);
                     auto gep = gen.GetBuilder().CreateStructGEP(templ->type, tmpVal->value, index);
-                    // new CodeType(gep->getType())
-                    auto newVal = new CodeValue(gep, found->second->As<VariableNode>().GetVariable()->type);
+                    // std::make_shared<CodeType>(gep->getType())
+                    auto newVal = std::make_shared<CodeValue>(gep, found->second->As<VariableNode>().GetVariable()->type);
 
                     gen.SetCurrentVar(newVal);
 
@@ -1677,7 +1691,7 @@ namespace Parsing
                         auto val = gen.Cast(init, dynamic_cast<VariableNode *>(found->second)->GetVariable()->type);
                         gen.GetBuilder().CreateStore(val->value, gep);
                     }
-                    delete newVal;
+
                     gen.SetCurrentVar(tmpVal);
                 }
                 else
@@ -1691,7 +1705,7 @@ namespace Parsing
         return nullptr;
     }
 
-    const CodeValue *ActionBaseStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> ActionBaseStatement::CodeGen(CodeGeneration &gen) const
     {
         // auto type = gen.TypeType(*templateType);
         // TypeSyntax *t = templateType;
@@ -1749,53 +1763,49 @@ namespace Parsing
 
     void ActionBaseStatement::PreCodeGen(CodeGeneration &gen) const
     {
-        auto type = gen.TypeType(*templateType);
-        // auto type = gen.TypeType(*templateType);
-        // TypeSyntax *t = templateType;
-
-        // while (t->GetType() == SyntaxType::GenericType)
-        //     t = t->As<GenericType>().GetBaseType();
-
-        auto lastScope = gen.GetInsertPoint();
-
-        if (type)
+        switch (gen.GetPreCodeGenPass())
         {
-            auto &node = static_cast<TemplateCodeValue *>(type)->GetNode();
-            // auto found = gen.FindSymbolInScope(t->As<IdentifierType>().GetToken().raw);
+        case 1:
+        {
+            auto type = gen.TypeType(*templateType);
+            auto lastScope = gen.GetInsertPoint();
 
-            // if (found && found->GetType() == SymbolNodeType::TemplateNode)
-            // {
-            gen.SetInsertPoint(&node);
+            if (type)
+            {
+                auto &node = std::static_pointer_cast<TemplateCodeValue>(type)->GetNode();
+                // auto found = gen.FindSymbolInScope(t->As<IdentifierType>().GetToken().raw);
 
-            gen.SetCurrentType(node.GetTemplate());
+                // if (found && found->GetType() == SymbolNodeType::TemplateNode)
+                // {
+                gen.SetInsertPoint(&node);
 
-            gen.Use(CodeGeneration::Using::NoBlock);
-            body->PreCodeGen(gen);
+                gen.SetCurrentType(node.GetTemplate());
 
-            gen.SetInsertPoint(lastScope);
-            // }
-            // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+                gen.Use(CodeGeneration::Using::NoBlock);
+                body->PreCodeGen(gen);
+
+                gen.SetInsertPoint(lastScope);
+                // }
+                // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+            }
+            break;
+        }
         }
     }
 
-    const CodeValue *ActionSpecStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> ActionSpecStatement::CodeGen(CodeGeneration &gen) const
     {
-        auto type = gen.TypeType(*templateType);
-        // TypeSyntax *t = templateType;
 
-        // while (t->GetType() == SyntaxType::GenericType)
-        //     t = t->As<GenericType>().GetBaseType();
+        auto type = gen.TypeType(*templateType);
 
         auto specType = gen.TypeType(*this->specType);
         auto lastScope = gen.GetInsertPoint();
 
         if (type && specType)
         {
-            auto &node = static_cast<TemplateCodeValue *>(type)->GetNode();
+            auto &node = std::static_pointer_cast<TemplateCodeValue>(type)->GetNode();
             // auto found = gen.FindSymbolInScope(t->As<IdentifierType>().GetToken().raw);
 
-            // if (found && found->GetType() == SymbolNodeType::TemplateNode)
-            // {
             gen.SetInsertPoint(&node);
 
             gen.SetCurrentType(node.GetTemplate());
@@ -1804,8 +1814,6 @@ namespace Parsing
             body->CodeGen(gen);
 
             gen.SetInsertPoint(lastScope);
-            // }
-            // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
         }
 
         return nullptr;
@@ -1813,121 +1821,124 @@ namespace Parsing
 
     void ActionSpecStatement::PreCodeGen(CodeGeneration &gen) const
     {
-        auto type = gen.TypeType(*templateType);
-        auto specType = gen.TypeType(*this->specType);
-
-        auto lastScope = gen.GetInsertPoint();
-
-        if (type && specType)
+        switch (gen.GetPreCodeGenPass())
         {
-            auto &node = static_cast<TemplateCodeValue *>(type)->GetNode();
-            auto &specNode = static_cast<SpecCodeValue *>(specType)->GetNode();
+        case 1:
+        {
+            auto type = gen.TypeType(*templateType);
+            auto specType = gen.TypeType(*this->specType);
 
-            gen.SetInsertPoint(&node);
+            auto lastScope = gen.GetInsertPoint();
 
-            gen.SetCurrentType(node.GetTemplate());
-
-            gen.Use(CodeGeneration::Using::NoBlock);
-
-            for (auto &stmt : body->GetStatements())
+            if (type && specType)
             {
-                switch (stmt->GetType())
+                auto &node = std::static_pointer_cast<TemplateCodeValue>(type)->GetNode();
+                auto &specNode = std::static_pointer_cast<SpecCodeValue>(specType)->GetNode();
+
+                gen.SetInsertPoint(&node);
+
+                gen.SetCurrentType(node.GetTemplate());
+
+                gen.Use(CodeGeneration::Using::NoBlock);
+
+                for (auto &stmt : body->GetStatements())
                 {
-                case SyntaxType::FunctionDeclerationStatement:
-                {
-                    auto &func = stmt->As<FunctionDeclerationStatement>();
-                    auto found = specNode.findSymbol(func.GetIdentifier().raw);
-
-                    if (found != specNode.children.end() && found->second->GetType() != SymbolNodeType::FunctionNode)
+                    switch (stmt->GetType())
                     {
-                        // TODO throw error symbol is not a function in spec
-                    }
-                    else if (found != specNode.children.end())
+                    case SyntaxType::FunctionDeclerationStatement:
                     {
-                        auto &foundFunc = found->second->As<FunctionNode>();
+                        auto &func = stmt->As<FunctionDeclerationStatement>();
+                        auto found = specNode.findSymbol(func.GetIdentifier().raw);
 
-                        auto retType = (func.GetRetType() == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*func.GetRetType()));
-                        bool member = false;
-                        std::vector<CodeType *> funcParameters;
-
-                        if (func.GetParameters().size() > 0 && func.GetParameters()[0]->GetVariableType() == nullptr)
+                        if (found != specNode.children.end() && found->second->GetType() != SymbolNodeType::FunctionNode)
                         {
-                            // auto type = new TemplateCodeValue(*static_cast<TemplateCodeValue *>(gen.GetCurrentType()));
-                            // type->type = type->type->getPointerTo();
-                            funcParameters.push_back(nullptr);
-                            member = true;
+                            // TODO throw error symbol is not a function in spec
                         }
+                        else if (found != specNode.children.end())
+                        {
+                            auto &foundFunc = found->second->As<FunctionNode>();
 
-                        for (auto p : func.GetParameters())
-                            if (p->GetVariableType())
+                            auto retType = (func.GetRetType() == nullptr ? std::make_shared<CodeType>(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*func.GetRetType()));
+                            bool member = false;
+                            std::vector<std::shared_ptr<CodeType>> funcParameters;
+
+                            if (func.GetParameters().size() > 0 && func.GetParameters()[0]->GetVariableType() == nullptr)
                             {
-                                auto type = gen.TypeType(*p->GetVariableType());
-                                funcParameters.push_back(type);
+                                // auto type = std::make_shared<TemplateCodeValue>(*static_cast<TemplateCodeValue *>(gen.GetCurrentType()));
+                                // type->type = type->type->getPointerTo();
+                                funcParameters.push_back(nullptr);
+                                member = true;
                             }
 
-                        if (foundFunc.GetFunction()->IsMember() != member)
-                        {
-                            // TODO throw error spec implementatin argumetns not the same
-                            break;
-                        }
-
-                        if (foundFunc.GetFunction()->GetParameters().size() != func.GetParameters().size())
-                        {
-                            // TODO throw erro function signarture does not match spec functions signature
-                            break;
-                        }
-
-                        if (member)
-                        {
-                            for (size_t i = 1; i < funcParameters.size(); i++)
-                            {
-                                auto pType = gen.TypeType(*func.GetParameters()[i]->GetVariableType());
-                                if (pType != foundFunc.GetFunction()->GetParameters()[i])
+                            for (auto p : func.GetParameters())
+                                if (p->GetVariableType())
                                 {
-                                    delete pType;
-                                    // TODO throw error function signarture doesnt match spec signature
-                                    break;
+                                    auto type = gen.TypeType(*p->GetVariableType());
+                                    funcParameters.push_back(type);
                                 }
-                                delete pType;
+
+                            if (foundFunc.GetFunction()->IsMember() != member)
+                            {
+                                // TODO throw error spec implementatin argumetns not the same
+                                break;
                             }
+
+                            if (foundFunc.GetFunction()->GetParameters().size() != func.GetParameters().size())
+                            {
+                                // TODO throw erro function signarture does not match spec functions signature
+                                break;
+                            }
+
+                            if (member)
+                            {
+                                for (size_t i = 1; i < funcParameters.size(); i++)
+                                {
+                                    auto pType = gen.TypeType(*func.GetParameters()[i]->GetVariableType());
+                                    if (pType != foundFunc.GetFunction()->GetParameters()[i])
+                                    {
+                                        // TODO throw error function signarture doesnt match spec signature
+                                        break;
+                                    }
+                                }
+                            }
+                            else
+                            {
+                                for (size_t i = 0; i < funcParameters.size(); i++)
+                                {
+                                    auto pType = gen.TypeType(*func.GetParameters()[i]->GetVariableType());
+                                    if (pType != foundFunc.GetFunction()->GetParameters()[i])
+                                    {
+                                        // TODO throw error function signarture doesnt match spec signature
+                                        break;
+                                    }
+                                }
+                            }
+                            // gen.GetInsertPoint()->AddChild<FunctionNode>(func.GetIdentifier().raw, new FunctionCodeValue(nullptr, retType, funcParameters, member));
                         }
                         else
                         {
-                            for (size_t i = 0; i < funcParameters.size(); i++)
-                            {
-                                auto pType = gen.TypeType(*func.GetParameters()[i]->GetVariableType());
-                                if (pType != foundFunc.GetFunction()->GetParameters()[i])
-                                {
-                                    delete pType;
-                                    // TODO throw error function signarture doesnt match spec signature
-                                    break;
-                                }
-                                delete pType;
-                            }
+                            // TODO throw error function not in spec
                         }
-                        // gen.GetInsertPoint()->AddChild<FunctionNode>(func.GetIdentifier().raw, new FunctionCodeValue(nullptr, retType, funcParameters, member));
-                    }
-                    else
-                    {
-                        // TODO throw error function not in spec
+
+                        break;
                     }
 
-                    break;
+                    default:
+                        break;
+                    }
                 }
 
-                default:
-                    break;
-                }
+                body->PreCodeGen(gen);
+
+                gen.SetInsertPoint(lastScope);
+                // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
             }
-
-            body->PreCodeGen(gen);
-
-            gen.SetInsertPoint(lastScope);
-            // gen.NewScope<ActionNode>(gen.GetInsertPoint()->GenerateName(), t->As<IdentifierType>().GetToken().raw);
+            break;
+        }
         }
     }
 
-    const CodeValue *LoopStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> LoopStatement::CodeGen(CodeGeneration &gen) const
     {
         if (expression)
         {
@@ -1962,7 +1973,7 @@ namespace Parsing
         return nullptr;
     }
 
-    const CodeValue *SpecStatement::CodeGen(CodeGeneration &gen) const
+    std::shared_ptr<CodeValue> SpecStatement::CodeGen(CodeGeneration &gen) const
     {
         return nullptr;
     }
@@ -1974,33 +1985,52 @@ namespace Parsing
 
         // while (t->GetType() == SyntaxType::GenericType)
         //     t = t->As<GenericType>().GetBaseType();
-
-        auto scope = gen.NewScope<SpecNode>(identifier.raw);
-        for (auto &stmt : body->GetStatements())
+        switch (gen.GetPreCodeGenPass())
         {
-            auto &func = stmt->As<FunctionDeclerationStatement>();
-            auto retType = (func.GetRetType() == nullptr ? new CodeType(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*func.GetRetType()));
-            bool member = false;
-            std::vector<CodeType *> funcParameters;
+        case 0:
+        {
+            auto scope = gen.NewScope<SpecNode>(identifier.raw);
+            gen.LastScope();
+            break;
+        }
+        case 1:
+        {
+            // auto scope = gen.NewScope<SpecNode>(identifier.raw);
+            auto found = gen.GetInsertPoint()->findSymbol(identifier.raw);
 
-            if (func.GetParameters().size() > 0 && func.GetParameters()[0]->GetVariableType() == nullptr)
+            if (found != gen.GetInsertPoint()->children.end())
             {
-                // auto type = new TemplateCodeValue(*static_cast<TemplateCodeValue *>(gen.GetCurrentType()));
-                // type->type = type->type->getPointerTo();
-                funcParameters.push_back(nullptr);
-                member = true;
+                gen.SetInsertPoint(found->second);
+                for (auto &stmt : body->GetStatements())
+                {
+                    auto &func = stmt->As<FunctionDeclerationStatement>();
+                    auto retType = (func.GetRetType() == nullptr ? std::make_shared<CodeType>(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*func.GetRetType()));
+                    bool member = false;
+                    std::vector<std::shared_ptr<CodeType>> funcParameters;
+
+                    if (func.GetParameters().size() > 0 && func.GetParameters()[0]->GetVariableType() == nullptr)
+                    {
+                        // auto type = std::make_shared<TemplateCodeValue>(*static_cast<TemplateCodeValue *>(gen.GetCurrentType()));
+                        // type->type = type->type->getPointerTo();
+                        funcParameters.push_back(nullptr);
+                        member = true;
+                    }
+
+                    for (auto p : func.GetParameters())
+                        if (p->GetVariableType())
+                        {
+                            auto type = gen.TypeType(*p->GetVariableType());
+                            funcParameters.push_back(type);
+                        }
+
+                    gen.GetInsertPoint()->AddChild<FunctionNode>(func.GetIdentifier().raw, std::make_shared<FunctionCodeValue>(nullptr, retType, funcParameters, member));
+                }
+                gen.LastScope();
             }
 
-            for (auto p : func.GetParameters())
-                if (p->GetVariableType())
-                {
-                    auto type = gen.TypeType(*p->GetVariableType());
-                    funcParameters.push_back(type);
-                }
-
-            gen.GetInsertPoint()->AddChild<FunctionNode>(func.GetIdentifier().raw, new FunctionCodeValue(nullptr, retType, funcParameters, member));
+            break;
         }
-        gen.LastScope();
+        }
     }
 
 } // namespace Parsing

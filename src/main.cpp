@@ -14,6 +14,9 @@
 #include <ModuleUnit.hpp>
 #include <llvm/IR/Mangler.h>
 
+size_t numCodeType = 2;
+size_t numCodeValue = 0;
+
 int main()
 {
     uint32_t f;
@@ -36,9 +39,9 @@ int main()
     if (!tokenizer.IsDirty())
     {
         Parsing::Parser parser(tokenList, tokenizer.GetFileIterator());
-        auto mod = parser.ParseModule("input");
         uint32_t f;
 
+        auto mod = parser.ParseModule("input");
         mod->CodeGen();
         mod->GetGen().GetModule().print(outputFile, nullptr);
         PrintSymbols(mod->GetGen().rootSymbols);
@@ -103,5 +106,6 @@ int main()
     }
     outputFile.close();
 
+    std::cout << "Code Value: " << numCodeValue << ", Code Type: " << numCodeType << std::endl;
     return 0;
 }

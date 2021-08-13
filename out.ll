@@ -4,6 +4,15 @@ source_filename = "input"
 %input.Object = type { i32, i1, %input.Inline }
 %input.Inline = type { i32 }
 
+define private void @_ZN5input4main() {
+entry:
+  %o = alloca %input.Object, align 8
+  %0 = call %input.Object @_ZN5input6Object6create()
+  store %input.Object %0, %input.Object* %o, align 4
+  call void @_ZN5input6Object11doSomething(%input.Object* %o, i32 5)
+  ret void
+}
+
 define private void @_ZN5input6Object11doSomething(%input.Object* %0, i32 %1) {
 entry:
   %f = alloca i32, align 4
@@ -29,15 +38,6 @@ entry:
   store i32 5, i32* %4, align 4
   %5 = load %input.Object, %input.Object* %0, align 4
   ret %input.Object %5
-}
-
-define private void @_ZN5input4main() {
-entry:
-  %o = alloca %input.Object, align 8
-  %0 = call %input.Object @_ZN5input6Object6create()
-  store %input.Object %0, %input.Object* %o, align 4
-  call void @_ZN5input6Object11doSomething(%input.Object* %o, i32 5)
-  ret void
 }
 
 define i32 @main(i32 %0, i8** %1) {

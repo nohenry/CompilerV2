@@ -11,8 +11,8 @@ include_directories(${LLVM_PATH}/llvm/include)
 include_directories(${LLVM_PATH}/build/include)
 
 file(GLOB_RECURSE TARGET_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp" )
-
-
+list(REMOVE_ITEM TARGET_SRC "${CMAKE_CURRENT_SOURCE_DIR}/src/test.cpp")
+message(${TARGET_SRC})
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/include)
 include_directories(${LLVM_INCLUDE_DIRS})

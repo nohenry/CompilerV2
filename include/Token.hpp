@@ -5,6 +5,7 @@
 #include <fstream>
 #include <iostream>
 #include <cassert>
+#include <vector>
 
 struct Position;
 class CodeGeneration;
@@ -340,146 +341,146 @@ struct Token : public Parsing::SyntaxNode
     }
 };
 
-class TokenIterator
-{
-public:
-    using ValueType = Token;
-    using PointerType = ValueType *;
-    using ReferenceType = ValueType &;
+// class TokenIterator
+// {
+// public:
+//     using ValueType = Token;
+//     using PointerType = ValueType *;
+//     using ReferenceType = ValueType &;
 
-public:
-    TokenIterator(PointerType token) : token{token}
-    {
-    }
+// public:
+//     TokenIterator(PointerType token) : token{token}
+//     {
+//     }
 
-    TokenIterator &operator++()
-    {
-        token++;
-        return *this;
-    }
+//     TokenIterator &operator++()
+//     {
+//         token++;
+//         return *this;
+//     }
 
-    TokenIterator operator++(int)
-    {
-        TokenIterator iterator = *this;
-        ++(*this);
-        return iterator;
-    }
+//     TokenIterator operator++(int)
+//     {
+//         TokenIterator iterator = *this;
+//         ++(*this);
+//         return iterator;
+//     }
 
-    bool operator==(const TokenIterator &other) const
-    {
-        return token == other.token;
-    }
+//     bool operator==(const TokenIterator &other) const
+//     {
+//         return token == other.token;
+//     }
 
-    bool operator!=(const TokenIterator &other) const
-    {
-        return token != other.token;
-    }
+//     bool operator!=(const TokenIterator &other) const
+//     {
+//         return token != other.token;
+//     }
 
-    TokenIterator &operator--()
-    {
-        token--;
-        return *this;
-    }
+//     TokenIterator &operator--()
+//     {
+//         token--;
+//         return *this;
+//     }
 
-    TokenIterator operator--(int)
-    {
-        TokenIterator iterator = *this;
-        --(*this);
-        return iterator;
-    }
+//     TokenIterator operator--(int)
+//     {
+//         TokenIterator iterator = *this;
+//         --(*this);
+//         return iterator;
+//     }
 
-    ValueType &operator[](int index)
-    {
-        return *(token + index);
-    }
+//     ValueType &operator[](int index)
+//     {
+//         return *(token + index);
+//     }
 
-    const ValueType &operator[](int index) const
-    {
-        return *(token + index);
-    }
+//     const ValueType &operator[](int index) const
+//     {
+//         return *(token + index);
+//     }
 
-    ValueType *operator->()
-    {
-        return token;
-    }
+//     ValueType *operator->()
+//     {
+//         return token;
+//     }
 
-    const ValueType *operator->() const
-    {
-        return token;
-    }
+//     const ValueType *operator->() const
+//     {
+//         return token;
+//     }
 
-    ValueType &operator*()
-    {
-        return *token;
-    }
+//     ValueType &operator*()
+//     {
+//         return *token;
+//     }
 
-    const ValueType &operator*() const
-    {
-        return *token;
-    }
+//     const ValueType &operator*() const
+//     {
+//         return *token;
+//     }
 
-    TokenIterator &operator+=(int value)
-    {
-        token += value;
-        return *this;
-    }
+//     TokenIterator &operator+=(int value)
+//     {
+//         token += value;
+//         return *this;
+//     }
 
-    TokenIterator operator+(int value) const
-    {
-        TokenIterator iterator = *this;
-        return iterator += value;
-    }
+//     TokenIterator operator+(int value) const
+//     {
+//         TokenIterator iterator = *this;
+//         return iterator += value;
+//     }
 
-    TokenIterator &operator-=(int value)
-    {
-        token -= value;
-        return *this;
-    }
+//     TokenIterator &operator-=(int value)
+//     {
+//         token -= value;
+//         return *this;
+//     }
 
-    TokenIterator operator-(int value) const
-    {
-        TokenIterator iterator = *this;
-        return iterator -= value;
-    }
+//     TokenIterator operator-(int value) const
+//     {
+//         TokenIterator iterator = *this;
+//         return iterator -= value;
+//     }
 
-    bool operator<(const TokenIterator &other) const
-    {
-        return token < other.token;
-    }
+//     bool operator<(const TokenIterator &other) const
+//     {
+//         return token < other.token;
+//     }
 
-    bool operator>(const TokenIterator &other) const
-    {
-        return other < *this;
-    }
+//     bool operator>(const TokenIterator &other) const
+//     {
+//         return other < *this;
+//     }
 
-    bool operator<=(const TokenIterator &other) const
-    {
-        return !(other < *this);
-    }
+//     bool operator<=(const TokenIterator &other) const
+//     {
+//         return !(other < *this);
+//     }
 
-    bool operator>=(const TokenIterator &other) const
-    {
-        return !(*this < other);
-    }
+//     bool operator>=(const TokenIterator &other) const
+//     {
+//         return !(*this < other);
+//     }
 
-    operator ValueType()
-    {
-        return *token;
-    }
+//     operator ValueType()
+//     {
+//         return *token;
+//     }
 
-    operator ValueType &()
-    {
-        return *token;
-    }
+//     operator ValueType &()
+//     {
+//         return *token;
+//     }
 
-    operator const ValueType &() const
-    {
-        return *token;
-    }
+//     operator const ValueType &() const
+//     {
+//         return *token;
+//     }
 
-private:
-    PointerType token;
-};
+// private:
+//     PointerType token;
+// };
 
 class FileIterator
 {
@@ -720,111 +721,113 @@ private:
     std::string fileName;
 };
 
-class TokenList
-{
-public:
-    using iterator = TokenIterator;
+using TokenList = std::vector<Token>;
 
-private:
-    uint32_t tok_size;
-    uint32_t tok_capacity;
-    Token *tokens;
+// class TokenList
+// {
+// public:
+//     using iterator = TokenIterator;
 
-public:
-    TokenList() : tok_size{0}, tok_capacity{0}, tokens{nullptr}
-    {
-    }
+// private:
+//     uint32_t tok_size;
+//     uint32_t tok_capacity;
+//     Token *tokens;
 
-    TokenList(const TokenList &v)
-    {
-        tok_size = v.tok_size;
-        tok_capacity = v.tok_capacity;
-        tokens = new Token[tok_size];
-        for (unsigned int i = 0; i < tok_size; i++)
-            tokens[i] = v.tokens[i];
-    }
+// public:
+//     TokenList() : tok_size{0}, tok_capacity{0}, tokens{nullptr}
+//     {
+//     }
 
-    TokenList &operator=(const TokenList &v)
-    {
-        delete[] tokens;
-        tok_size = v.tok_size;
-        tok_capacity = v.tok_capacity;
-        tokens = new Token[tok_size];
-        for (unsigned int i = 0; i < tok_size; i++)
-            tokens[i] = v.tokens[i];
-        return *this;
-    }
+//     TokenList(const TokenList &v)
+//     {
+//         tok_size = v.tok_size;
+//         tok_capacity = v.tok_capacity;
+//         tokens = new Token[tok_size];
+//         for (unsigned int i = 0; i < tok_size; i++)
+//             tokens[i] = v.tokens[i];
+//     }
 
-    ~TokenList()
-    {
-        delete[] tokens;
-    }
+//     TokenList &operator=(const TokenList &v)
+//     {
+//         delete[] tokens;
+//         tok_size = v.tok_size;
+//         tok_capacity = v.tok_capacity;
+//         tokens = new Token[tok_size];
+//         for (unsigned int i = 0; i < tok_size; i++)
+//             tokens[i] = v.tokens[i];
+//         return *this;
+//     }
 
-    const iterator begin() const
-    {
-        return iterator(tokens);
-    }
+//     ~TokenList()
+//     {
+//         delete[] tokens;
+//     }
 
-    const iterator end() const
-    {
-        return iterator(tokens + tok_size);
-    }
+//     const iterator begin() const
+//     {
+//         return iterator(tokens);
+//     }
 
-    const Token &front() const
-    {
-        return *tokens;
-    }
+//     const iterator end() const
+//     {
+//         return iterator(tokens + tok_size);
+//     }
 
-    const Token &back() const
-    {
-        return tokens[tok_size - 1];
-    }
+//     const Token &front() const
+//     {
+//         return *tokens;
+//     }
 
-    const uint32_t size() const { return tok_size; }
+//     const Token &back() const
+//     {
+//         return tokens[tok_size - 1];
+//     }
 
-    void add(const Token &v)
-    {
-        if (tok_size >= tok_capacity)
-            reserve(tok_capacity + 5);
-        tokens[tok_size++] = v;
-    }
+//     const uint32_t size() const { return tok_size; }
 
-    void clear()
-    {
-        tok_size = 0;
-        tok_capacity = 0;
-        if (tokens != nullptr)
-        {
-            delete[] tokens;
-            tokens = nullptr;
-        }
-    }
+//     void add(const Token &v)
+//     {
+//         if (tok_size >= tok_capacity)
+//             reserve(tok_capacity + 5);
+//         tokens[tok_size++] = v;
+//     }
 
-private:
-    void reserve(uint32_t capacity)
-    {
-        if (tokens == nullptr)
-        {
-            tok_size = 0;
-            tok_capacity = 0;
-        }
-        Token *Newbuffer = new Token[capacity];
-        uint32_t l_Size = capacity < tok_size ? capacity : tok_size;
+//     void clear()
+//     {
+//         tok_size = 0;
+//         tok_capacity = 0;
+//         if (tokens != nullptr)
+//         {
+//             delete[] tokens;
+//             tokens = nullptr;
+//         }
+//     }
 
-        for (uint32_t i = 0; i < l_Size; i++)
-            Newbuffer[i] = tokens[i];
+// private:
+//     void reserve(uint32_t capacity)
+//     {
+//         if (tokens == nullptr)
+//         {
+//             tok_size = 0;
+//             tok_capacity = 0;
+//         }
+//         Token *Newbuffer = new Token[capacity];
+//         uint32_t l_Size = capacity < tok_size ? capacity : tok_size;
 
-        tok_capacity = capacity;
-        delete[] tokens;
-        tokens = Newbuffer;
-    }
+//         for (uint32_t i = 0; i < l_Size; i++)
+//             Newbuffer[i] = tokens[i];
 
-    void resize(uint32_t size)
-    {
-        reserve(size);
-        tok_size = size;
-    }
-};
+//         tok_capacity = capacity;
+//         delete[] tokens;
+//         tokens = Newbuffer;
+//     }
+
+//     void resize(uint32_t size)
+//     {
+//         reserve(size);
+//         tok_size = size;
+//     }
+// };
 
 const char *TokenTypeString(TokenType e);
 

@@ -17,7 +17,7 @@ namespace Parsing
     {
         if (type->GetType() == SyntaxType::ReferenceType)
         {
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::ReferenceType, ErrorCode::ReferenceToReference,
                 "A reference cannot reference a reference!",
                 Range(token.position.start, type->As<ReferenceType>().token.position.end));
@@ -26,13 +26,79 @@ namespace Parsing
         }
     }
 
-    FileIterator *Parser::globalFptr = nullptr;
-    ErrorList Parser::errors;
+    // std::unique_ptr<ModuleUnit> Parser::ParseModule(const std::string &moduleName)
+    // {
+    //     tokenIterator = tokenList.begin();
+    //     const Token &start = tokenIterator;
+    //     std::vector<Statement> statements;
+    //     while (tokenIterator->type != TokenType::Eof)
+    //     {
+    //         try
+    //         {
+    //             if (tokenIterator->type == TokenType::Newline)
+    //             {
+    //                 Next();
+    //                 continue;
+    //             }
+    //             auto node = ParseTopLevelScopeStatement();
+    //             if (node)
+    //                 statements.push_back(node);
+    //             else
+    //                 break;
+    //         }
+    //         catch (const BaseException &e)
+    //         {
+    //             Next();
+    //             break;
+    //         }
+    //     }
+    //     for (auto e : errors)
+    //     {
+    //         auto pe = dynamic_cast<CompilerError *>(e);
+    //         if (pe->GetErrorCode() == ErrorCode::ExpectedType)
+    //         {
+    //             auto pet = dynamic_cast<ExpectedTypeError *>(e);
+    //             Logging::Error(color::bold(color::white("Unexpected token {}. Expected {}")), pet->GetFoundToken().raw.c_str(), TokenTypeString(pet->GetTokenType()));
+    //             if (pet->IsLeaf())
+    //                 Logging::CharacterSnippet(fptr, pet->GetFoundToken().position);
+    //             Logging::Log("");
+    //             continue;
+    //         }
+    //         else if (pe->GetErrorCode() == ErrorCode::SampleSnippet)
+    //         {
+    //             auto pet = dynamic_cast<SampleSuggestion *>(e);
+    //             Logging::Log(color::bold(color::white("Try using the following:")));
+    //             Logging::SampleSnippet(fptr, pet->GetPosition(), pet->GetInsert());
+    //             Logging::Log("");
+    //             continue;
+    //         }
+    //         switch (pe->GetErrorType())
+    //         {
+    //         default:
+    //             if (pe->IsLeaf())
+    //             {
 
-    std::unique_ptr<ModuleUnit> Parser::ParseModule(const std::string &moduleName)
+    //                 Logging::Error(color::bold(color::white(pe->GetMessage())));
+    //                 Logging::CharacterSnippet(fptr, pe->GetRange());
+    //             }
+    //             else
+    //             {
+    //                 Logging::Error(pe->GetMessage());
+    //             }
+    //             Logging::Log("");
+    //             break;
+    //         }
+    //     }
+
+    //     auto module = std::make_unique<ModuleUnit>(moduleName, start, statements, tokenIterator);
+    //     PrintNode(module->GetSyntaxTree());
+    //     return module;
+    // }
+
+    std::unique_ptr<BlockStatement<>> Parser::Parse()
     {
         tokenIterator = tokenList.begin();
-        const Token &start = tokenIterator;
+        const Token &start = *tokenIterator;
         std::vector<Statement> statements;
         while (tokenIterator->type != TokenType::Eof)
         {
@@ -40,7 +106,7 @@ namespace Parsing
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 auto node = ParseTopLevelScopeStatement();
@@ -51,51 +117,12 @@ namespace Parsing
             }
             catch (const BaseException &e)
             {
-                tokenIterator++;
-                break;
-            }
-        }
-        for (auto e : errors)
-        {
-            auto pe = dynamic_cast<ParsingError *>(e);
-            if (pe->GetErrorCode() == ErrorCode::ExpectedType)
-            {
-                auto pet = dynamic_cast<ExpectedTypeError *>(e);
-                Logging::Error(color::bold(color::white("Unexpected token {}. Expected {}")), pet->GetFoundToken().raw.c_str(), TokenTypeString(pet->GetTokenType()));
-                if (pet->IsLeaf())
-                    Logging::CharacterSnippet(fptr, pet->GetFoundToken().position);
-                Logging::Log("");
-                continue;
-            }
-            else if (pe->GetErrorCode() == ErrorCode::SampleSnippet)
-            {
-                auto pet = dynamic_cast<SampleSuggestion *>(e);
-                Logging::Log(color::bold(color::white("Try using the following:")));
-                Logging::SampleSnippet(fptr, pet->GetPosition(), pet->GetInsert());
-                Logging::Log("");
-                continue;
-            }
-            switch (pe->GetErrorType())
-            {
-            default:
-                if (pe->IsLeaf())
-                {
-
-                    Logging::Error(color::bold(color::white(pe->GetMessage())));
-                    Logging::CharacterSnippet(fptr, pe->GetRange());
-                }
-                else
-                {
-                    Logging::Error(pe->GetMessage());
-                }
-                Logging::Log("");
+                Next();
                 break;
             }
         }
 
-        auto module = std::make_unique<ModuleUnit>(moduleName, start, statements, tokenIterator);
-        PrintNode(module->GetSyntaxTree());
-        return module;
+        return std::make_unique<BlockStatement<>>(start, statements, *tokenIterator);
     }
 
     Statement Parser::ParseStatement()
@@ -145,7 +172,7 @@ namespace Parsing
         case TokenType::Export:
             return ParseExport();
         default:
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::TopLevelScope, ErrorCode::InvalidStatement,
                 "Invalid statement for top level scope", tokenIterator->position);
             // Logging::Error(color::bold(color::white("Expecting item, found keyword {}")), tokenIterator->raw.c_str());
@@ -171,7 +198,7 @@ namespace Parsing
         {
             if (tokenIterator->type == TokenType::Newline)
             {
-                tokenIterator++;
+                Next();
                 continue;
             }
             auto statement = ParseTemplateScopeStatement();
@@ -183,7 +210,7 @@ namespace Parsing
             {
                 // Logging::Error(color::bold(color::white("Unknown token {} in statement")), tokenIterator->raw.c_str());
                 // Logging::CharacterSnippet(fptr, tokenIterator->position);
-                // tokenIterator++;
+                // Next();
                 // continue;
                 break;
             }
@@ -205,7 +232,7 @@ namespace Parsing
         case TokenType::Type:
             return ParseTypeAlias();
         default:
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::TemplateScope, ErrorCode::InvalidStatement,
                 "Invalid statement for template body", tokenIterator->position);
             break;
@@ -229,7 +256,7 @@ namespace Parsing
         {
             if (tokenIterator->type == TokenType::Newline)
             {
-                tokenIterator++;
+                Next();
                 continue;
             }
             statements.push_back(ParseSpecScopeStatement());
@@ -257,7 +284,7 @@ namespace Parsing
         case TokenType::Type:
             return ParseSpecTypeAlias();
         default:
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::TemplateScope, ErrorCode::InvalidStatement,
                 "Invalid statement for spec body", tokenIterator->position);
             break;
@@ -275,18 +302,18 @@ namespace Parsing
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 auto statement = ParseStatement();
                 if (statement)
                     statements.push_back(statement);
                 if (tokenIterator->type == TokenType::Newline)
-                    tokenIterator++;
+                    Next();
             }
             catch (const BaseException &e)
             {
-                tokenIterator++;
+                Next();
                 if (!keepGoing)
                     return nullptr;
             }
@@ -298,20 +325,20 @@ namespace Parsing
     Statement Parser::ParseTemplateVariableDecleration()
     {
         const Token &let = Expect(TokenType::Let);
-        const Token &ident = tokenIterator++;
+        const Token &ident = Next();
         TypeSyntax *type = nullptr;
 
         switch (tokenIterator->type)
         {
         case TokenType::Colon:
-            tokenIterator++;
+            Next();
             type = ParseType();
             break;
         case TokenType::Equal:
         {
-            const Token &equal = tokenIterator++;
+            const Token &equal = Next();
             auto expr = ParseExpression();
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::TemplateVariableDecleration, ErrorCode::VariableInitializer,
                 "Variable cannot have initializer in template!",
                 Range(equal.GetStart(), expr->GetEnd()));
@@ -319,11 +346,11 @@ namespace Parsing
         }
         case TokenType::FuncArrow:
         {
-            auto getArrow = tokenIterator++;
+            auto getArrow = Next();
             ExpressionBodyStatement *eb = nullptr;
             if (tokenIterator->type == TokenType::FuncArrow)
             {
-                auto setArrow = tokenIterator++;
+                auto setArrow = Next();
                 auto set = ParseStatement();
                 eb = new ExpressionBodyStatement(getArrow, setArrow, set);
             }
@@ -332,7 +359,7 @@ namespace Parsing
                 auto get = ParseStatement();
                 if (tokenIterator->type == TokenType::FuncArrow)
                 {
-                    auto setArrow = tokenIterator++;
+                    auto setArrow = Next();
                     auto set = ParseStatement();
                     eb = new ExpressionBodyStatement(getArrow, get, setArrow, set);
                 }
@@ -354,20 +381,20 @@ namespace Parsing
     Statement Parser::ParseActionExpressionBody()
     {
         const Token &let = Expect(TokenType::Let);
-        const Token &ident = tokenIterator++;
+        const Token &ident = Next();
         TypeSyntax *type = nullptr;
 
         switch (tokenIterator->type)
         {
         case TokenType::Colon:
-            tokenIterator++;
+            Next();
             type = ParseType();
             break;
         case TokenType::Equal:
         {
-            const Token &equal = tokenIterator++;
+            const Token &equal = Next();
             auto expr = ParseExpression();
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::TemplateVariableDecleration, ErrorCode::VariableInitializer,
                 "Variable cannot have initializer in template!",
                 Range(equal.GetStart(), expr->GetEnd()));
@@ -378,11 +405,11 @@ namespace Parsing
             break;
         }
 
-        auto getArrow = Expect(TokenType::FuncArrow);
+        auto &getArrow = Expect(TokenType::FuncArrow);
         ExpressionBodyStatement *eb = nullptr;
         if (tokenIterator->type == TokenType::FuncArrow)
         {
-            auto setArrow = tokenIterator++;
+            auto setArrow = Next();
             auto set = ParseStatement();
             eb = new ExpressionBodyStatement(getArrow, setArrow, set);
         }
@@ -391,7 +418,7 @@ namespace Parsing
             auto get = ParseStatement();
             if (tokenIterator->type == TokenType::FuncArrow)
             {
-                auto setArrow = tokenIterator++;
+                auto setArrow = Next();
                 auto set = ParseStatement();
                 eb = new ExpressionBodyStatement(getArrow, get, setArrow, set);
             }
@@ -406,20 +433,20 @@ namespace Parsing
     Statement Parser::ParseSpecVariableDecleration()
     {
         const Token &let = Expect(TokenType::Let);
-        const Token &ident = tokenIterator++;
+        const Token &ident = Next();
         TypeSyntax *type = nullptr;
 
         switch (tokenIterator->type)
         {
         case TokenType::Colon:
-            tokenIterator++;
+            Next();
             type = ParseType();
             break;
         case TokenType::Equal:
         {
-            const Token &equal = tokenIterator++;
+            const Token &equal = Next();
             auto expr = ParseExpression();
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::SpecVariableDecleration, ErrorCode::VariableInitializer,
                 "Variable cannot have initializer in spec!",
                 Range(equal.GetStart(), expr->GetEnd()));
@@ -432,19 +459,19 @@ namespace Parsing
 
         if (tokenIterator->type == TokenType::Identifier && (tokenIterator->raw == "get" || tokenIterator->raw == "set"))
         {
-            const Token &get = tokenIterator->raw == "get" ? tokenIterator++ : TokenNull;
+            const Token &get = tokenIterator->raw == "get" ? Next() : TokenNull;
             if (tokenIterator->type == TokenType::Identifier)
             {
                 if (tokenIterator->raw != "set")
                     goto ERROR;
-                const Token &set = tokenIterator->raw == "set" ? tokenIterator++ : TokenNull;
+                const Token &set = tokenIterator->raw == "set" ? Next() : TokenNull;
                 const Token &right = Expect(TokenType::RightCurly);
                 auto eb = new ExpressionBodySpecStatement(left, get, set, right);
                 return new VariableDeclerationStatement(let, ident, eb, type);
             }
             else
             {
-                const Token &set = tokenIterator->raw == "set" ? tokenIterator++ : TokenNull;
+                const Token &set = tokenIterator->raw == "set" ? Next() : TokenNull;
                 const Token &right = Expect(TokenType::RightCurly);
                 auto eb = new ExpressionBodySpecStatement(left, get, set, right);
                 return new VariableDeclerationStatement(let, ident, eb, type);
@@ -453,9 +480,9 @@ namespace Parsing
     ERROR:
         while (tokenIterator->type != TokenType::RightCurly)
         {
-            tokenIterator++;
+            Next();
         }
-        ThrowParsingErrorSnippet(
+        ThrowCompilerErrorSnippet(
             ErrorType::SpecVariableDecleration, ErrorCode::VariableInitializer,
             "Variable in spec needs an expression body specifier!",
             tokenIterator->position, CreateSampleSnippet(Range(left.position.start, tokenIterator->position.end), std::string("{ get }")));
@@ -464,17 +491,17 @@ namespace Parsing
     Statement Parser::ParseVariableDecleration()
     {
         const Token &let = Expect(TokenType::Let);
-        const Token &ident = tokenIterator++;
+        const Token &ident = Next();
         TypeSyntax *type = nullptr;
         Expression initializer = nullptr;
         if (tokenIterator->type == TokenType::Colon)
         {
-            const Token &colon = tokenIterator++;
+            const Token &colon = Next();
             type = ParseType();
         }
         if (tokenIterator->type == TokenType::Equal)
         {
-            const Token &equal = tokenIterator++;
+            const Token &equal = Next();
             initializer = ParseExpression();
         }
         return new VariableDeclerationStatement(let, ident, type, initializer);
@@ -507,7 +534,7 @@ namespace Parsing
         Expression initializer = nullptr;
         if (tokenIterator->type == TokenType::Colon)
         {
-            const Token &colon = tokenIterator++;
+            const Token &colon = Next();
             type = ParseType();
         }
 
@@ -536,7 +563,7 @@ namespace Parsing
         {
             if (tokenIterator->type == TokenType::Newline)
             {
-                tokenIterator++;
+                Next();
                 continue;
             }
             auto var = dynamic_cast<VariableDeclerationStatement *>(ParseVariableDecleration());
@@ -548,7 +575,7 @@ namespace Parsing
                 Position end = var->GetIdentifier().position.end;
                 if (var->GetVariableType())
                     end = var->GetVariableType()->GetEnd();
-                ThrowParsingError(
+                ThrowCompilerError(
                     ErrorType::FunctionDecleration, ErrorCode::NotDefault,
                     "All parameters after one defualt parameter must be default as well!",
                     Range(var->GetKeyword().position.start, end));
@@ -559,7 +586,7 @@ namespace Parsing
             if (tokenIterator->type != TokenType::RightParen)
                 Expect(TokenType::Comma);
             else if (tokenIterator->type == TokenType::Comma)
-                tokenIterator++;
+                Next();
         }
         const Token &right = Expect(TokenType::RightParen);
         if (right == TokenNull)
@@ -584,14 +611,14 @@ namespace Parsing
         if (tokenIterator->type == TokenType::LeftAngle)
             generic = ParseGenericParameter();
 
-        const Token &left = tokenIterator++;
+        const Token &left = Next();
         std::vector<VariableDeclerationStatement *> parameters;
         bool defaultInit = false;
         while (tokenIterator->type != TokenType::RightParen && tokenIterator->type != TokenType::Eof)
         {
             if (tokenIterator->type == TokenType::Newline)
             {
-                tokenIterator++;
+                Next();
                 continue;
             }
             auto var = dynamic_cast<VariableDeclerationStatement *>(ParseVariableDecleration());
@@ -610,7 +637,7 @@ namespace Parsing
             if (tokenIterator->type != TokenType::RightParen)
                 Expect(TokenType::Comma);
             else if (tokenIterator->type == TokenType::Comma)
-                tokenIterator++;
+                Next();
         }
         const Token &right = Expect(TokenType::RightParen);
 
@@ -637,9 +664,9 @@ namespace Parsing
             auto bad = ParseElif();
             try
             {
-                ThrowParsingError(ErrorType::IfStatement, ErrorCode::ElseAfterElse,
-                                  "Cannot have else clause or elif clause after an else clause has already been declared!",
-                                  Range(bad->GetStart(), bad->GetEnd()))
+                ThrowCompilerError(ErrorType::IfStatement, ErrorCode::ElseAfterElse,
+                                   "Cannot have else clause or elif clause after an else clause has already been declared!",
+                                   Range(bad->GetStart(), bad->GetEnd()))
             }
             catch (const BaseException &e)
             {
@@ -654,17 +681,17 @@ namespace Parsing
     {
         if (tokenIterator->type == TokenType::Elif)
         {
-            const Token &keyword = tokenIterator++;
+            const Token &keyword = Next();
             Use(Using::If);
             auto expression = ParseExpression();
             UnUse(Using::If);
             auto body = ParseStatement();
             auto ifs = new IfStatement(keyword, expression, body, dynamic_cast<ElseStatement *>(ParseElif()));
-            return new ElseStatement(tokenIterator, ifs);
+            return new ElseStatement(keyword, ifs);
         }
         else if (tokenIterator->type == TokenType::Else)
         {
-            const Token &keyword = tokenIterator++;
+            const Token &keyword = Next();
             auto body = ParseStatement();
             return new ElseStatement(keyword, body);
         }
@@ -710,7 +737,7 @@ namespace Parsing
 
             if (tokenIterator->type == TokenType::Colon)
             {
-                const Token &in = tokenIterator++;
+                const Token &in = Next();
                 auto typeB = ParseType();
                 if (typeB)
                 {
@@ -722,7 +749,7 @@ namespace Parsing
                 }
                 else
                 {
-                    ThrowParsingError(
+                    ThrowCompilerError(
                         ErrorType::ActionScope, ErrorCode::ExpectedType,
                         "Expected type for action", tokenIterator->position);
                     // Logging::Error(color::bold(color::white("Expected type, found token {}")), tokenIterator->raw.c_str());
@@ -741,7 +768,7 @@ namespace Parsing
         }
         else
         {
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::ActionScope, ErrorCode::ExpectedType,
                 "Expected type for action", tokenIterator->position);
             // Logging::Error(color::bold(color::white("Expected type, found token {}")), tokenIterator->raw.c_str());
@@ -752,7 +779,7 @@ namespace Parsing
 
     Statement Parser::ParseActionBody()
     {
-        const Token &left = tokenIterator++;
+        const Token &left = Next();
 
         std::vector<Statement> statements;
         while (tokenIterator->type != TokenType::RightCurly && tokenIterator->type != TokenType::Eof)
@@ -761,7 +788,7 @@ namespace Parsing
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 auto statement = ParseActionScopeStatement();
@@ -772,7 +799,7 @@ namespace Parsing
             }
             catch (const BaseException &e)
             {
-                // tokenIterator++;
+                // Next();
                 if (!keepGoing)
                     return nullptr;
             }
@@ -799,7 +826,7 @@ namespace Parsing
             catch (const ExpectedTypeError &e)
             {
                 if (e.GetFoundToken().type == TokenType::Equal)
-                    ThrowMidParsingError(ErrorType::ActionStatement, ErrorCode::NoVarInAction, "A constant, non-expression body variable cannot be declared in action statement!", e.GetFoundToken().position);
+                    ThrowMidCompilerError(ErrorType::ActionStatement, ErrorCode::NoVarInAction, "A constant, non-expression body variable cannot be declared in action statement!", e.GetFoundToken().position);
                 if (!keepGoing)
                     return nullptr;
             }
@@ -814,7 +841,7 @@ namespace Parsing
             catch (const ExpectedTypeError &e)
             {
                 if (e.GetTokenType() == TokenType::FuncArrow)
-                    ThrowMidParsingError(ErrorType::ActionStatement, ErrorCode::ExprBodyOnly, "Only expression body variables are allowed", e.GetFoundToken().position);
+                    ThrowMidCompilerError(ErrorType::ActionStatement, ErrorCode::ExprBodyOnly, "Only expression body variables are allowed", e.GetFoundToken().position);
                 if (!keepGoing)
                     return nullptr;
             }
@@ -823,7 +850,7 @@ namespace Parsing
         case TokenType::Type:
             return ParseTypeAlias();
         default:
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::ActionScope, ErrorCode::InvalidStatement,
                 "Invalid statement for action body", tokenIterator->position);
             break;
@@ -842,14 +869,14 @@ namespace Parsing
         {
             if (tokenIterator->type == TokenType::Newline)
             {
-                tokenIterator++;
+                Next();
                 continue;
             }
             statements.push_back(new EnumIdentifierStatement(Expect(TokenType::Identifier)));
             if (tokenIterator->type != TokenType::RightCurly)
                 Expect(TokenType::Comma);
             else if (tokenIterator->type == TokenType::Comma)
-                tokenIterator++;
+                Next();
         }
 
         const Token &right = Expect(TokenType::RightCurly);
@@ -899,7 +926,7 @@ namespace Parsing
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 auto param = ParseGenericParameterEntry();
@@ -907,11 +934,11 @@ namespace Parsing
                 if (tokenIterator->type != TokenType::RightAngle)
                     Expect(TokenType::Comma);
                 else if (tokenIterator->type == TokenType::Comma)
-                    tokenIterator++;
+                    Next();
             }
             catch (const ExpectedTypeError &e)
             {
-                tokenIterator++;
+                Next();
                 if (!keepGoing)
                     return nullptr;
             }
@@ -926,12 +953,12 @@ namespace Parsing
         std::vector<TypeSyntax *> constraints;
         if (tokenIterator->type == TokenType::Colon)
         {
-            const Token &colon = tokenIterator++;
+            const Token &colon = Next();
             while (tokenIterator->type != TokenType::RightAngle && tokenIterator->type != TokenType::Comma && tokenIterator->type != TokenType::Eof)
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 auto spec = ParseType();
@@ -940,7 +967,7 @@ namespace Parsing
                 if (tokenIterator->type != TokenType::Ampersand)
                     Expect(TokenType::Comma);
                 else if (tokenIterator->type == TokenType::Comma)
-                    tokenIterator++;
+                    Next();
             }
         }
         return new GenericParameterEntry(identifier, constraints);
@@ -948,7 +975,7 @@ namespace Parsing
 
     ObjectInitializer *Parser::ParseObjectInitializer()
     {
-        auto left = Expect(TokenType::LeftCurly);
+        auto &left = Expect(TokenType::LeftCurly);
         std::vector<ObjectKeyValue *> values;
         while (tokenIterator->type != TokenType::RightCurly && tokenIterator->type != TokenType::Comma && tokenIterator->type != TokenType::Eof)
         {
@@ -956,7 +983,7 @@ namespace Parsing
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 const Token &key = Expect(TokenType::Identifier);
@@ -966,11 +993,11 @@ namespace Parsing
                 if (tokenIterator->type != TokenType::RightCurly && tokenIterator->type != TokenType::Newline)
                     Expect(TokenType::Comma);
                 else if (tokenIterator->type == TokenType::Comma)
-                    tokenIterator++;
+                    Next();
             }
             catch (const ExpectedTypeError &e)
             {
-                tokenIterator++;
+                Next();
                 if (!keepGoing)
                     return nullptr;
             }
@@ -980,7 +1007,7 @@ namespace Parsing
                     return nullptr;
             }
         }
-        auto right = Expect(TokenType::RightCurly);
+        auto &right = Expect(TokenType::RightCurly);
         return new ObjectInitializer(left, values, right);
     }
 
@@ -988,7 +1015,7 @@ namespace Parsing
     {
         Expression expr = nullptr;
         if (tokenIterator->type == TokenType::Else)
-            tokenIterator++;
+            Next();
         else
             expr = ParseExpression();
         const Token &arrow = Expect(TokenType::FuncArrow);
@@ -1004,7 +1031,7 @@ namespace Parsing
             auto unaryPrecedence = UnaryPrecedence(tokenIterator->type);
             if (unaryPrecedence != 0 && unaryPrecedence >= parentPrecedence)
             {
-                const Token &op = tokenIterator++;
+                const Token &op = Next();
                 auto right = ParseExpression(unaryPrecedence);
                 if (right)
                     left = new UnaryExpression(right, op);
@@ -1017,7 +1044,7 @@ namespace Parsing
 
         if (!left)
         {
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::Expression, ErrorCode::NoLeft,
                 std::string("Unexpected token `") + tokenIterator->raw + ("` in expression!"),
                 tokenIterator->position);
@@ -1029,7 +1056,7 @@ namespace Parsing
         uint8_t precedence = 0;
         while ((precedence = BinaryPrecedence(tokenIterator->type)) > parentPrecedence && precedence > 0)
         {
-            const Token &op = tokenIterator++;
+            const Token &op = Next();
             if (op.type == TokenType::As)
             {
                 auto right = ParseType();
@@ -1077,7 +1104,7 @@ namespace Parsing
                 break;
 
             default:
-                const Token &op = tokenIterator++;
+                const Token &op = Next();
                 left = new PostfixExpression(left, op);
                 break;
             }
@@ -1089,7 +1116,7 @@ namespace Parsing
     {
         if (tokenIterator->type == TokenType::LeftParen)
         {
-            const Token &left = tokenIterator++;
+            const Token &left = Next();
             if (tokenIterator->type == TokenType::Let || tokenIterator->type == TokenType::RightParen)
             {
                 tokenIterator--;
@@ -1112,23 +1139,23 @@ namespace Parsing
         {
         case TokenType::Integer:
         {
-            const Token &token = tokenIterator++;
+            const Token &token = Next();
             return new IntegerSyntax(token);
         }
         case TokenType::Floating:
         {
-            const Token &token = tokenIterator++;
+            const Token &token = Next();
             return new FloatingSyntax(token);
         }
         case TokenType::True:
         case TokenType::False:
         {
-            const Token &token = tokenIterator++;
+            const Token &token = Next();
             return new BooleanSyntax(token);
         }
         case TokenType::String:
         {
-            const Token &token = tokenIterator++;
+            const Token &token = Next();
             return new StringSyntax(token);
         }
         case TokenType::Identifier:
@@ -1148,7 +1175,7 @@ namespace Parsing
             return ParseMatch();
         }
         default:
-            ThrowParsingError(
+            ThrowCompilerError(
                 ErrorType::Literal, ErrorCode::UnknownLiteral,
                 std::string("Expected a literal value! Found token `") + tokenIterator->raw + std::string("` instead."),
                 tokenIterator->position);
@@ -1162,7 +1189,7 @@ namespace Parsing
 
     Expression Parser::ParseIdentifier()
     {
-        const Token &token = tokenIterator++;
+        const Token &token = Next();
         switch (tokenIterator->type)
         {
         // case TokenType::LeftParen:
@@ -1186,14 +1213,14 @@ namespace Parsing
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 args.push_back(ParseExpression());
                 if (tokenIterator->type != TokenType::RightParen)
                     Expect(TokenType::Comma);
                 else if (tokenIterator->type == TokenType::Comma)
-                    tokenIterator++;
+                    Next();
             }
             catch (const BaseException &e)
             {
@@ -1216,7 +1243,7 @@ namespace Parsing
         {
             if (tokenIterator->type == TokenType::Newline)
             {
-                tokenIterator++;
+                Next();
                 continue;
             }
             auto var = dynamic_cast<VariableDeclerationStatement *>(ParseVariableDecleration());
@@ -1227,7 +1254,7 @@ namespace Parsing
                 Position end = var->GetIdentifier().position.end;
                 if (var->GetVariableType())
                     end = var->GetVariableType()->GetEnd();
-                ThrowParsingError(
+                ThrowCompilerError(
                     ErrorType::FunctionDecleration, ErrorCode::NotDefault,
                     "All parameters after one defualt parameter must be default as well!",
                     Range(var->GetKeyword().position.start, end));
@@ -1237,7 +1264,7 @@ namespace Parsing
             if (tokenIterator->type != TokenType::RightParen)
                 Expect(TokenType::Comma);
             else if (tokenIterator->type == TokenType::Comma)
-                tokenIterator++;
+                Next();
         }
         const Token &right = Expect(TokenType::RightParen);
         const Token &arrow = Expect(TokenType::FuncArrow);
@@ -1267,7 +1294,7 @@ namespace Parsing
         auto expression = ParseExpression();
         if (tokenIterator->type == TokenType::Colon)
         {
-            const Token &colon = tokenIterator++;
+            const Token &colon = Next();
             auto boundary = ParseExpression();
             return new ArrayLiteralBoundaryEntry(expression, colon, boundary);
         }
@@ -1286,7 +1313,7 @@ namespace Parsing
                 if (tokenIterator->type != TokenType::RightSquare)
                     Expect(TokenType::Comma);
                 else if (tokenIterator->type == TokenType::Comma)
-                    tokenIterator++;
+                    Next();
             }
             catch (const BaseException &e)
             {
@@ -1311,7 +1338,7 @@ namespace Parsing
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 entries.push_back(ParseMatchEntry());
@@ -1334,25 +1361,25 @@ namespace Parsing
         switch (tokenIterator->type)
         {
         case TokenType::Identifier:
-            baseType = new IdentifierType(tokenIterator++);
+            baseType = new IdentifierType(Next());
             break;
         case TokenType::Int:
         case TokenType::Uint:
         case TokenType::Bool:
         case TokenType::Float:
         case TokenType::Char:
-            baseType = new PrimitiveType(tokenIterator++);
+            baseType = new PrimitiveType(Next());
             break;
         case TokenType::LeftParen:
         {
-            const Token &left = tokenIterator++;
+            const Token &left = Next();
             std::vector<TypeSyntax *> parameters;
 
             while (tokenIterator->type != TokenType::RightParen && tokenIterator->type != TokenType::Eof)
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 auto nextType = ParseType();
@@ -1360,24 +1387,24 @@ namespace Parsing
                 {
                     // Logging::Error(color::bold(color::white("'{}' is not a type")), tokenIterator->raw.c_str());
                     // Logging::CharacterSnippet(fptr, Range(tokenIterator->position.start, tokenIterator->position.end));
-                    tokenIterator++;
+                    Next();
                     return nullptr;
                 }
                 parameters.push_back(nextType);
                 if (tokenIterator->type != TokenType::RightParen)
                     Expect(TokenType::Comma);
                 else if (tokenIterator->type == TokenType::Comma)
-                    tokenIterator++;
+                    Next();
             }
             const Token &right = Expect(TokenType::RightParen);
 
             auto retType = ParseType();
-            baseType = new FunctionType(left, parameters, right, tokenIterator->type == TokenType::FuncArrow ? tokenIterator++ : TokenNull, retType);
+            baseType = new FunctionType(left, parameters, right, tokenIterator->type == TokenType::FuncArrow ? Next() : TokenNull, retType);
             break;
         }
         case TokenType::Ampersand:
         {
-            const Token &amp = tokenIterator++;
+            const Token &amp = Next();
             baseType = ParseType();
             if (baseType)
                 baseType = new ReferenceType(amp, baseType);
@@ -1385,11 +1412,11 @@ namespace Parsing
         }
         case TokenType::LeftSquare:
         {
-            const Token &open = tokenIterator++;
+            const Token &open = Next();
             auto type = ParseType();
             if (tokenIterator->type == TokenType::Colon)
             {
-                const Token &colon = tokenIterator++;
+                const Token &colon = Next();
                 auto size = ParseExpression();
                 const Token &close = Expect(TokenType::RightSquare);
                 baseType = new ArrayType(open, type, colon, size, close);
@@ -1404,14 +1431,14 @@ namespace Parsing
         }
         if (tokenIterator->type == TokenType::LeftAngle)
         {
-            const Token &left = tokenIterator++;
+            const Token &left = Next();
             std::vector<TypeSyntax *> arguments;
 
             while (tokenIterator->type != TokenType::RightAngle && tokenIterator->type != TokenType::Eof)
             {
                 if (tokenIterator->type == TokenType::Newline)
                 {
-                    tokenIterator++;
+                    Next();
                     continue;
                 }
                 auto nextType = ParseType();
@@ -1419,14 +1446,14 @@ namespace Parsing
                 {
                     // Logging::Error(color::bold(color::white("'{}' is not a type")), tokenIterator->raw.c_str());
                     // Logging::CharacterSnippet(fptr, Range(tokenIterator->position.start, tokenIterator->position.end));
-                    tokenIterator++;
+                    Next();
                     return nullptr;
                 }
                 arguments.push_back(nextType);
                 if (tokenIterator->type != TokenType::RightAngle)
                     Expect(TokenType::Comma);
                 else if (tokenIterator->type == TokenType::Comma)
-                    tokenIterator++;
+                    Next();
             }
             const Token &right = Expect(TokenType::RightAngle);
             if (right == TokenNull)

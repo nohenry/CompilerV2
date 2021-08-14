@@ -15,15 +15,14 @@ private:
 
 private:
     TokenList tokenList;
-    std::string filePath;
-    FileIterator fptr;
+    FileIterator &fptr;
     bool dirty = false;
 
 public:
-    Tokenizer(std::string filePath) : filePath{filePath}, fptr{filePath} {}
+    Tokenizer(FileIterator &fptr) : fptr{fptr} {}
     ~Tokenizer() {}
 
-    const TokenList &Tokenize();
+    TokenList &Tokenize();
     IterateType Identifier();
     IterateType Integer();
     IterateType Float();

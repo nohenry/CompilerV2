@@ -19,92 +19,70 @@ size_t numCodeValue = 0;
 
 int main()
 {
-    uint32_t f;
-    Tokenizer tokenizer("examples/input.dsl");
-    // Tokenizer tokenizer("examples/test.dsl");
-    const auto &tokenList = tokenizer.Tokenize();
-    for (const auto &token : tokenList)
-    {
-        std::cout << token << std::endl;
-    }
-    std::error_code error;
-    llvm::raw_fd_ostream outputFile("out.ll", error);
+    ModuleUnit module("examples/input.dsl", "input");
+    module.Compile();
+    module.DumpIR();
 
-    if (error)
-    {
-        llvm::errs() << "Could not open file: " << error.message();
-        return 1;
-    }
+    // mod->GetGen().GetModule().print(outputFile, nullptr);
+    // PrintSymbols(mod->GetGen().rootSymbols);
 
-    if (!tokenizer.IsDirty())
-    {
-        Parsing::Parser parser(tokenList, tokenizer.GetFileIterator());
-        uint32_t f;
+    // auto targetTriple = llvm::sys::getDefaultTargetTriple();
 
-        auto mod = parser.ParseModule("input");
-        mod->CodeGen();
-        mod->GetGen().GetModule().print(outputFile, nullptr);
-        PrintSymbols(mod->GetGen().rootSymbols);
+    // llvm::InitializeAllTargetInfos();
+    // llvm::InitializeAllTargets();
+    // llvm::InitializeAllTargetMCs();
+    // llvm::InitializeAllAsmParsers();
+    // llvm::InitializeAllAsmPrinters();
 
-        auto targetTriple = llvm::sys::getDefaultTargetTriple();
+    // std::string Error;
+    // auto target = llvm::TargetRegistry::lookupTarget(targetTriple, Error);
 
-        llvm::InitializeAllTargetInfos();
-        llvm::InitializeAllTargets();
-        llvm::InitializeAllTargetMCs();
-        llvm::InitializeAllAsmParsers();
-        llvm::InitializeAllAsmPrinters();
+    // if (!target)
+    // {
+    //     llvm::errs() << Error;
+    //     return 1;
+    // }
 
-        std::string Error;
-        auto target = llvm::TargetRegistry::lookupTarget(targetTriple, Error);
+    // auto targetName = target->getName();
+    // llvm::SubtargetFeatures features;
+    // llvm::StringMap<bool> hostFeatures;
 
-        if (!target)
-        {
-            llvm::errs() << Error;
-            return 1;
-        }
+    // if (llvm::sys::getHostCPUFeatures(hostFeatures))
+    //     for (auto &f : hostFeatures)
+    //         features.AddFeature(f.first(), f.second);
 
-        auto targetName = target->getName();
-        llvm::SubtargetFeatures features;
-        llvm::StringMap<bool> hostFeatures;
+    // llvm::TargetOptions opt;
+    // auto RM = llvm::Optional<llvm::Reloc::Model>();
+    // auto CM = llvm::Optional<llvm::CodeModel::Model>();
+    // auto optimization = llvm::CodeGenOpt::Level::None;
+    // auto targetMachine = target->createTargetMachine(targetTriple, targetName, features.getString(), opt, RM, CM, optimization);
+    // auto DL = targetMachine->createDataLayout();
 
-        if (llvm::sys::getHostCPUFeatures(hostFeatures))
-            for (auto &f : hostFeatures)
-                features.AddFeature(f.first(), f.second);
+    // llvm::Mangler::getNameWithPrefix(llvm::outs(), "Function", DL);
+    // // targetMachine.getDa
+    // mod->GetGen().GetModule().setDataLayout(targetMachine->createDataLayout());
+    // mod->GetGen().GetModule().setTargetTriple(targetTriple);
 
-        llvm::TargetOptions opt;
-        auto RM = llvm::Optional<llvm::Reloc::Model>();
-        auto CM = llvm::Optional<llvm::CodeModel::Model>();
-        auto optimization = llvm::CodeGenOpt::Level::None;
-        auto targetMachine = target->createTargetMachine(targetTriple, targetName, features.getString(), opt, RM, CM, optimization);
-        auto DL = targetMachine->createDataLayout();
+    // auto filename = "out.o";
+    // llvm::raw_fd_ostream dest(filename, error);
 
-        llvm::Mangler::getNameWithPrefix(llvm::outs(), "Function", DL);
-        // targetMachine.getDa
-        mod->GetGen().GetModule().setDataLayout(targetMachine->createDataLayout());
-        mod->GetGen().GetModule().setTargetTriple(targetTriple);
+    // if (error)
+    // {
+    //     llvm::errs() << "Could not open file: " << error.message();
+    //     return 1;
+    // }
 
-        auto filename = "out.o";
-        llvm::raw_fd_ostream dest(filename, error);
+    // llvm::legacy::PassManager pass;
+    // auto FileType = llvm::CGFT_ObjectFile;
 
-        if (error)
-        {
-            llvm::errs() << "Could not open file: " << error.message();
-            return 1;
-        }
+    // if (targetMachine->addPassesToEmitFile(pass, dest, nullptr, FileType))
+    // {
+    //     llvm::errs() << "TargetMachine can't emit a file of this type";
+    //     return 1;
+    // }
 
-        llvm::legacy::PassManager pass;
-        auto FileType = llvm::CGFT_ObjectFile;
-
-        if (targetMachine->addPassesToEmitFile(pass, dest, nullptr, FileType))
-        {
-            llvm::errs() << "TargetMachine can't emit a file of this type";
-            return 1;
-        }
-
-        pass.run(mod->GetGen().GetModule());
-        dest.flush();
-    }
-    outputFile.close();
+    // pass.run(mod->GetGen().GetModule());
+    // dest.flush();
 
     std::cout << "Code Value: " << numCodeValue << ", Code Type: " << numCodeType << std::endl;
     return 0;

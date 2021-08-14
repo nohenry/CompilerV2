@@ -11,6 +11,9 @@
 #include <memory>
 #include <iostream>
 
+#include <Token.hpp>
+#include <Errors.hpp>
+
 // std::string gen_random(const int len);
 // #include <Parser.hpp>
 namespace Parsing
@@ -31,7 +34,7 @@ struct CodeType
         numCodeType++;
     }
 
-    ~CodeType()
+    virtual ~CodeType()
     {
         // type->print(llvm::outs());
         // llvm::outs() << "\n";
@@ -54,17 +57,37 @@ struct CodeValue
     llvm::Value *value;
     std::shared_ptr<CodeType> type;
 
-    CodeValue(llvm::Value *value, std::shared_ptr<CodeType> type) : value{value}, type{std::move(type)}
+    CodeValue(llvm::Value *value, std::shared_ptr<CodeType> type) : value{value}, type{type}
     {
         numCodeValue++;
     }
 
-    ~CodeValue()
+    virtual ~CodeValue()
     {
         // value->print(llvm::outs());
         // llvm::outs() << "\n";
         numCodeValue--;
     }
+};
+
+struct FunctionCodeType : public CodeType
+{
+private:
+    std::shared_ptr<CodeType> returnType;
+    std::vector<std::shared_ptr<CodeType>> parameters;
+    bool isMember;
+
+public:
+    FunctionCodeType(
+        std::shared_ptr<CodeType> returnType,
+        std::vector<std::shared_ptr<CodeType>> parameters,
+        bool isMember) : CodeType(nullptr), returnType{returnType}, parameters{parameters}, isMember{isMember}
+    {
+    }
+
+    const auto &GetParameters() const { return parameters; }
+    auto GetReturnType() const { return returnType; }
+    const bool IsMember() const { return isMember; }
 };
 
 struct FunctionCodeValue : public CodeValue
@@ -73,8 +96,6 @@ private:
     llvm::AllocaInst *retLoc;
     llvm::BasicBlock *retLabel;
     int numRets = 0;
-    std::vector<std::shared_ptr<CodeType>> parameters;
-    bool isMember;
 
 public:
     llvm::Value *lastStoreValue = nullptr;
@@ -84,11 +105,9 @@ public:
 public:
     FunctionCodeValue(
         llvm::Function *value,
-        std::shared_ptr<CodeType> type,
-        std::vector<std::shared_ptr<CodeType>> parameters,
-        bool isMember,
+        std::shared_ptr<FunctionCodeType> functionType,
         llvm::AllocaInst *retLoc = nullptr,
-        llvm::BasicBlock *retLabel = nullptr) : CodeValue(value, std::move(type)), retLoc{retLoc}, retLabel{retLabel}, parameters{parameters}, isMember{isMember}
+        llvm::BasicBlock *retLabel = nullptr) : CodeValue(value, functionType), retLoc{retLoc}, retLabel{retLabel}
     {
     }
 
@@ -108,21 +127,21 @@ public:
     auto GetReturnLabel() { return retLabel; }
     void SetReturnLabel(llvm::BasicBlock *ret) { retLabel = ret; }
     void IncNumRets() { numRets++; }
-    const auto &GetParameters() const { return parameters; }
-    const bool IsMember() const { return isMember; }
+
+    auto GetFunctionType() { return std::static_pointer_cast<FunctionCodeType>(type); }
 };
 
 class TemplateNode;
 
-struct TemplateCodeValue : public CodeType
+struct TemplateCodeType : public CodeType
 {
     TemplateNode &node;
 
-    TemplateCodeValue(llvm::Type *type, TemplateNode &node) : CodeType(type), node{node}
+    TemplateCodeType(llvm::Type *type, TemplateNode &node) : CodeType(type), node{node}
     {
     }
 
-    ~TemplateCodeValue()
+    virtual ~TemplateCodeType()
     {
     }
 
@@ -136,15 +155,15 @@ struct TemplateCodeValue : public CodeType
 
 class SpecNode;
 
-struct SpecCodeValue : public CodeType
+struct SpecCodeType : public CodeType
 {
     SpecNode &node;
 
-    SpecCodeValue(llvm::Type *type, SpecNode &node) : CodeType(type), node{node}
+    SpecCodeType(llvm::Type *type, SpecNode &node) : CodeType(type), node{node}
     {
     }
 
-    ~SpecCodeValue()
+    virtual ~SpecCodeType()
     {
     }
 
@@ -301,7 +320,7 @@ private:
     std::shared_ptr<FunctionCodeValue> function;
 
 public:
-    FunctionNode(SymbolNode *parent, std::shared_ptr<FunctionCodeValue> function) : SymbolNode{parent}, function{std::move(function)} {}
+    FunctionNode(SymbolNode *parent, std::shared_ptr<FunctionCodeValue> function) : SymbolNode{parent}, function{function} {}
     virtual ~FunctionNode() {}
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::FunctionNode; }
@@ -315,7 +334,7 @@ private:
     std::shared_ptr<CodeValue> variable;
 
 public:
-    VariableNode(SymbolNode *parent, std::shared_ptr<CodeValue> variable) : SymbolNode{parent}, variable{std::move(variable)} {}
+    VariableNode(SymbolNode *parent, std::shared_ptr<CodeValue> variable) : SymbolNode{parent}, variable{variable} {}
     virtual ~VariableNode() {}
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::VariableNode; }
@@ -339,11 +358,11 @@ public:
 class TemplateNode : public SymbolNode
 {
 private:
-    std::shared_ptr<TemplateCodeValue> templ;
+    std::shared_ptr<TemplateCodeType> templ;
     std::vector<llvm::Type *> members;
 
 public:
-    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{std::make_shared<TemplateCodeValue>(templ, *this)} {}
+    TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{std::make_shared<TemplateCodeType>(templ, *this)} {}
     virtual ~TemplateNode()
     {
     }
@@ -429,10 +448,13 @@ private:
     std::shared_ptr<CodeValue> currentVar;
     std::shared_ptr<CodeType> currentType;
     std::shared_ptr<CodeValue> dotExprBase;
+    Range currentRange;
 
     std::bitset<64> usings;
 
     uint8_t preCodeGenPass = 0;
+
+    static ErrorList errors;
 
 public:
     CodeGeneration(const std::string &moduleName) : builder{context}, module{new llvm::Module(moduleName, context)}
@@ -454,7 +476,7 @@ public:
     std::shared_ptr<CodeType> TypeType(const Parsing::SyntaxNode &node);
     std::shared_ptr<CodeValue> Cast(std::shared_ptr<CodeValue> value, std::shared_ptr<CodeType> toType, bool implicit = true);
     static uint8_t GetNumBits(uint64_t val);
-    std::shared_ptr<TemplateCodeValue> TypeFromObjectInitializer(const Parsing::SyntaxNode &object);
+    std::shared_ptr<TemplateCodeType> TypeFromObjectInitializer(const Parsing::SyntaxNode &object);
     std::shared_ptr<CodeValue> FollowDotChain(const Parsing::SyntaxNode &);
 
     void GenerateMain();
@@ -488,6 +510,16 @@ public:
     void SetInsertPoint(SymbolNode *newIns)
     {
         insertPoint = newIns;
+    }
+
+    auto &GetCurrentRange()
+    {
+        return currentRange;
+    }
+
+    void SetCurrentRange(Range range)
+    {
+        currentRange = range;
     }
 
     // Iterate backwards the symbol tree to see if the specified symbol name  exits
@@ -557,7 +589,7 @@ public:
     llvm::AllocaInst *CreateEntryBlockAlloca(llvm::Type *type, const std::string &VarName, llvm::Function *func = nullptr)
     {
         if (!func)
-            func = static_cast<llvm::Function *>(currentFunction->value);
+            func = currentFunction->Function();
         llvm::IRBuilder<> TmpB(&func->getEntryBlock(), func->getEntryBlock().begin());
         return TmpB.CreateAlloca(type, nullptr, VarName);
     }

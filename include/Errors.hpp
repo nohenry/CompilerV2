@@ -25,6 +25,8 @@ enum class ErrorType
     SpecVariableDecleration,
     SampleSnippet,
     IfStatement,
+
+    Cast
 };
 
 enum class ErrorCode
@@ -41,7 +43,9 @@ enum class ErrorCode
     SampleSnippet,
     ExprBodyOnly,
     ElseAfterElse,
-    NoType
+    NoType,
+
+    NoImplicitCast
 };
 
 class BaseException
@@ -53,7 +57,7 @@ public:
     const T &As() const { return *dynamic_cast<const T *>(this); }
 };
 
-class ParsingError : public BaseException
+class CompilerError : public BaseException
 {
 private:
     ErrorType type;
@@ -66,18 +70,18 @@ private:
     bool leaf;
 
 public:
-    ParsingError(ErrorType type,
-                 ErrorCode code,
-                 const std::string &message,
-                 const FileIterator &iter,
-                 Range range,
-                 std::string fileName,
-                 int lineNumber,
-                 bool leaf) noexcept : type{type}, code{code}, message{message}, iterator{iter}, range{range}, fileName{fileName}, lineNumber{lineNumber}, leaf{leaf}
+    CompilerError(ErrorType type,
+                  ErrorCode code,
+                  const std::string &message,
+                  const FileIterator &iter,
+                  Range range,
+                  std::string fileName,
+                  int lineNumber,
+                  bool leaf) noexcept : type{type}, code{code}, message{message}, iterator{iter}, range{range}, fileName{fileName}, lineNumber{lineNumber}, leaf{leaf}
     {
     }
 
-    virtual ~ParsingError() {}
+    virtual ~CompilerError() {}
 
     const auto &GetFileIterator() const noexcept { return iterator; }
     const auto &GetRange() const noexcept { return range; }
@@ -118,7 +122,7 @@ public:
     }
 };
 
-class ExpectedTypeError : public ParsingError
+class ExpectedTypeError : public CompilerError
 {
 private:
     TokenType tokenType;
@@ -134,7 +138,7 @@ public:
                       int lineNumber,
                       bool leaf,
                       TokenType tokenType,
-                      const Token &found) noexcept : ParsingError(type, code, message, iter, range, fileName, lineNumber, leaf), tokenType{tokenType}, found{found}
+                      const Token &found) noexcept : CompilerError(type, code, message, iter, range, fileName, lineNumber, leaf), tokenType{tokenType}, found{found}
     {
     }
     virtual ~ExpectedTypeError() {}
@@ -143,7 +147,7 @@ public:
     const Token &GetFoundToken() const noexcept { return found; }
 };
 
-class SampleSuggestion : public ParsingError
+class SampleSuggestion : public CompilerError
 {
 private:
     Range pos;
@@ -159,7 +163,7 @@ public:
                      int lineNumber,
                      bool leaf,
                      Range pos,
-                     const std::string &insert) noexcept : ParsingError(type, code, message, iter, range, fileName, lineNumber, leaf), pos{pos}, insert{insert}
+                     const std::string &insert) noexcept : CompilerError(type, code, message, iter, range, fileName, lineNumber, leaf), pos{pos}, insert{insert}
     {
     }
     virtual ~SampleSuggestion() {}
@@ -198,51 +202,138 @@ public:
         excpetions.push_back(v);
     }
 
+
     void clear()
     {
         excpetions.clear();
     }
 };
 
-#define ThrowParsingError(t, c, m, r)                                                             \
-    {                                                                                             \
-        auto ___errr = new ParsingError(t, c, m, Parser::GetFptr(), r, __FILE__, __LINE__, true); \
-        Parser::GetErrorList().add(___errr);                                                      \
-        throw *___errr;                                                                           \
-    }
-#define ThrowParsingErrorSnippet(t, c, m, r, s)                                                   \
-    {                                                                                             \
-        auto ___errr = new ParsingError(t, c, m, Parser::GetFptr(), r, __FILE__, __LINE__, true); \
-        Parser::GetErrorList().add(___errr);                                                      \
-        s;                                                                                        \
-        throw *___errr;                                                                           \
-    }
-#define ThrowMidParsingError(t, c, m, r)                                              \
-    {                                                                                 \
-        auto ___errr = new ParsingError(t, c, m, fptr, r, __FILE__, __LINE__, false); \
-        errors.add(___errr);                                                          \
-        throw *___errr;                                                               \
-    }
-#define ThrowMidParsingErrorSnippet(t, c, m, r, s)                                    \
-    {                                                                                 \
-        auto ___errr = new ParsingError(t, c, m, fptr, r, __FILE__, __LINE__, false); \
-        errors.add(___errr);                                                          \
-        s;                                                                            \
-        throw *___errr;                                                               \
-    }
-#define ThrowExpectedType(t, m, expected)                                                                                                                      \
-    {                                                                                                                                                          \
-        auto ___errr = new ExpectedTypeError(t, ErrorCode::ExpectedType, m, fptr, tokenIterator->position, __FILE__, __LINE__, true, expected, tokenIterator); \
-        errors.add(___errr);                                                                                                                                   \
-        throw *___errr;                                                                                                                                        \
-    }
-#define ThrowExpectedTypeSnippet(t, m, expected, s)                                                                                                            \
-    {                                                                                                                                                          \
-        auto ___errr = new ExpectedTypeError(t, ErrorCode::ExpectedType, m, fptr, tokenIterator->position, __FILE__, __LINE__, true, expected, tokenIterator); \
-        errors.add(___errr);                                                                                                                                   \
-        s;                                                                                                                                                     \
-        throw *___errr;                                                                                                                                        \
+/**
+ * @brief This macro creates and throws a standard compiler error
+ * 
+ * @param t the type of error
+ * @param c the error code
+ * @param m the message of the error
+ * @param r the range to be underlined when displayed
+ * 
+ * @throws CompilerError the created exception
+ * 
+ */
+#define ThrowCompilerError(t, c, m, r)                                                                 \
+    {                                                                                                  \
+        auto ___errr = new CompilerError(t, c, m, ModuleUnit::GetFptr(), r, __FILE__, __LINE__, true); \
+        ModuleUnit::errors.add(___errr);                                                               \
+        throw *___errr;                                                                                \
     }
 
+/**
+ * @brief This macro creates and throws a compiler error with the ability
+ *        to create a snippet to help the user fix their error
+ * 
+ * @param t the type of error
+ * @param c the error code
+ * @param m the message of the error
+ * @param r the range to be underlined when displayed
+ * @param s the snippet which should be created with `CreateSampleSnippet`
+ * 
+ * @throws CompilerError the created exception
+ * 
+ */
+#define ThrowCompilerErrorSnippet(t, c, m, r, s)                                                       \
+    {                                                                                                  \
+        auto ___errr = new CompilerError(t, c, m, ModuleUnit::GetFptr(), r, __FILE__, __LINE__, true); \
+        ModuleUnit::errors.add(___errr);                                                               \
+        s;                                                                                             \
+        throw *___errr;                                                                                \
+    }
+
+/**
+ * @brief This macro creates and throws a compiler error that originates
+ *        in code that doesn't terminate. As in it will call other functions
+ *        that may throw excpetions
+ * 
+ * @param t the type of error
+ * @param c the error code
+ * @param m the message of the error
+ * @param r the range to be underlined when displayed
+ * 
+ * @throws CompilerError the created exception
+ * 
+ */
+#define ThrowMidCompilerError(t, c, m, r)                                                               \
+    {                                                                                                   \
+        auto ___errr = new CompilerError(t, c, m, ModuleUnit::GetFptr(), r, __FILE__, __LINE__, false); \
+        ModuleUnit::errors.add(___errr);                                                                \
+        throw *___errr;                                                                                 \
+    }
+
+/**
+ * @brief This macro creates and throws a compiler error with a snippet that originates
+ *        in code that doesn't terminate. As in it will call other functions
+ *        that may throw excpetions
+ * 
+ * @param t the type of error
+ * @param c the error code
+ * @param m the message of the error
+ * @param s the snippet which should be created with `CreateSampleSnippet`
+ * 
+ * @throws CompilerError the created exception
+ * 
+ */
+#define ThrowMidCompilerErrorSnippet(t, c, m, r, s)                                                     \
+    {                                                                                                   \
+        auto ___errr = new CompilerError(t, c, m, ModuleUnit::GetFptr(), r, __FILE__, __LINE__, false); \
+        ModuleUnit::errors.add(___errr);                                                                \
+        s;                                                                                              \
+        throw *___errr;                                                                                 \
+    }
+
+/**
+ * @brief This macro creates and throws an expected type compiler error
+ * 
+ * @param t the type of error
+ * @param c the error code
+ * @param m the message of the error
+ * 
+ * @throws CompilerError the created exception
+ * 
+ */
+#define ThrowExpectedType(t, m, expected)                                                                                                                                       \
+    {                                                                                                                                                                           \
+        auto ___errr = new ExpectedTypeError(t, ErrorCode::ExpectedType, m, ModuleUnit::GetFptr(), tokenIterator->position, __FILE__, __LINE__, true, expected, *tokenIterator); \
+        ModuleUnit::errors.add(___errr);                                                                                                                                        \
+        throw *___errr;                                                                                                                                                         \
+    }
+
+/**
+ * @brief This macro creates and throws an expected type compiler error with snippet
+ * 
+ * @param t the type of error
+ * @param c the error code
+ * @param m the message of the error
+ * 
+ * @throws CompilerError the created exception
+ * 
+ */
+#define ThrowExpectedTypeSnippet(t, m, expected, s)                                                                                                                             \
+    {                                                                                                                                                                           \
+        auto ___errr = new ExpectedTypeError(t, ErrorCode::ExpectedType, m, ModuleUnit::GetFptr(), tokenIterator->position, __FILE__, __LINE__, true, expected, *tokenIterator); \
+        ModuleUnit::errors.add(___errr);                                                                                                                                        \
+        s;                                                                                                                                                                      \
+        throw *___errr;                                                                                                                                                         \
+    }
+
+/**
+ * @brief This macro creates a snippet of code to be displayed to the user
+ *        to help them understand what's wrong or to give them an exmple of what to do
+ * 
+ * @param t the type of error
+ * @param c the error code
+ * @param m the message of the error
+ * 
+ * @throws CompilerError the created exception
+ * 
+ */
 #define CreateSampleSnippet(pos, ins) \
-    Parser::GetErrorList().add(new SampleSuggestion(ErrorType::SampleSnippet, ErrorCode::SampleSnippet, "", Parser::GetFptr(), tokenIterator->position, __FILE__, __LINE__, true, pos, ins))
+    ModuleUnit::errors.add(new SampleSuggestion(ErrorType::SampleSnippet, ErrorCode::SampleSnippet, "", ModuleUnit::GetFptr(), tokenIterator->position, __FILE__, __LINE__, true, pos, ins))

@@ -1,41 +1,36 @@
 #pragma once
 #include <Parser.hpp>
 #include <CodeGen.hpp>
+#include <Tokenizer.hpp>
+
 #include <string>
 
 using namespace Parsing;
 
 class ModuleUnit
 {
+public:
+    static ErrorList errors;
+
 private:
-    BlockStatement<> syntaxTree;
-    CodeGeneration generation;
+    static FileIterator *globalFptr;
+
+private:
+    std::string filename;
+    std::string moduleName;
+
+    FileIterator fptr;
+
+    std::unique_ptr<Tokenizer> tokenizer;
+    std::unique_ptr<Parser> parser;
+    std::unique_ptr<CodeGeneration> generation;
 
 public:
-    ModuleUnit(const std::string &moduleName, const Token &start, const std::vector<Statement> statements, const Token &eof) : syntaxTree{start, statements, eof}, generation{moduleName} {}
-    ~ModuleUnit()
-    {
-        // delete generation.rootSymbols;
-    }
+    ModuleUnit(const std::string &filename, const std::string &moduleName);
+    ~ModuleUnit();
 
-    const auto &GetSyntaxTree() const { return syntaxTree; }
-    virtual std::shared_ptr<CodeValue> CodeGen()
-    {
-        generation.Use(CodeGeneration::Using::NoBlock);
-
-        generation.SetPreCodeGenPass(0);
-        syntaxTree.PreCodeGen(generation);
-
-        generation.SetPreCodeGenPass(1);
-        syntaxTree.PreCodeGen(generation);
-
-        // PrintSymbols(generation.rootSymbols);
-
-        auto gen = syntaxTree.CodeGen(generation);
-        generation.GenerateMain();
-
-        return gen;
-    }
-
-    const auto &GetGen() const { return generation; }
+    void Compile();
+    void DumpIR();
+    
+    static FileIterator &GetFptr() { return *globalFptr; }
 };

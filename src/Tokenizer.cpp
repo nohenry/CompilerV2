@@ -20,10 +20,8 @@ void print();
         goto DONE_TRYING;         \
     }
 
-const TokenList &Tokenizer::Tokenize()
+TokenList &Tokenizer::Tokenize()
 {
-    Logging::Log("    {} {}", color::bold(color::green("Compiling")), filePath);
-
     char c = fptr++;
     int i = 0;
     do
@@ -38,7 +36,7 @@ const TokenList &Tokenizer::Tokenize()
                 auto start = (tokenList.size() == 0 ? Position() : tokenList.back().position.end );
                 auto end = start;
                 end.character++;
-                tokenList.add(Token(TokenType::Newline, Range(start, end)));
+                tokenList.push_back(Token(TokenType::Newline, Range(start, end)));
             }
             c = fptr++;
             current = TokenDisregard;
@@ -54,7 +52,7 @@ const TokenList &Tokenizer::Tokenize()
         if (current != TokenNull)
         {
             if (current != TokenDisregard)
-                tokenList.add(current);
+                tokenList.push_back(current);
         }
         else if (*fptr)
         {
@@ -65,7 +63,7 @@ const TokenList &Tokenizer::Tokenize()
         c = fptr++;
         i++;
     } while (!fptr.End());
-    this->tokenList.add(TokenNull);
+    this->tokenList.push_back(TokenNull);
     return this->tokenList;
 }
 

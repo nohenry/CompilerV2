@@ -537,6 +537,7 @@ namespace Parsing
                           std::vector<ObjectKeyValue *> values,
                           const Token &right) : left{left}, values{values}, right{right}
         {
+            std::cout << "Obj " <<  &left << std::endl;
         }
         virtual ~ObjectInitializer() {}
 
@@ -927,8 +928,8 @@ namespace Parsing
     private:
         Expression fn;
         const Token &leftParen;
-        const Token &rightParen;
         std::vector<Expression> arguments;
+        const Token &rightParen;
 
     public:
         CallExpression(Expression fn, const Token &leftParen,
@@ -962,7 +963,7 @@ namespace Parsing
 
         virtual const Position &GetEnd() const override
         {
-            return arguments.back()->GetEnd();
+            return rightParen.GetEnd();
         }
 
         virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
@@ -1121,7 +1122,7 @@ namespace Parsing
 
         virtual const Position &GetEnd() const override
         {
-            return constraints.back()->GetEnd();
+            return constraints.size() > 0 ? constraints.back()->GetEnd() : identifier.position.end;
         }
 
         const auto &GetIdentifier() const { return identifier; }
@@ -1573,7 +1574,16 @@ namespace Parsing
 
         virtual const Position &GetEnd() const override
         {
-            return initializer->GetEnd();
+            if (initializer)
+                return initializer->GetEnd();
+            else if (expressionBody)
+                return expressionBody->GetEnd();
+            else if (specExpressionBody)
+                return specExpressionBody->GetEnd();
+            else if (type)
+                return type->GetEnd();
+            else
+                return identifier.position.end;
         }
 
         virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
@@ -1646,7 +1656,12 @@ namespace Parsing
 
         virtual const Position &GetEnd() const override
         {
-            return body->GetEnd();
+            if (body)
+                return body->GetEnd();
+            else if (retType)
+                return retType->GetEnd();
+            else
+                return arrow.position.end;
         }
 
         virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
@@ -2364,20 +2379,19 @@ namespace Parsing
         };
 
     private:
-        const TokenList &tokenList;
-        const FileIterator &fptr;
+        TokenList &tokenList;
         TokenList::iterator tokenIterator;
         bool keepGoing = true;
         std::bitset<64> usings;
 
-        static ErrorList errors;
-        static FileIterator *globalFptr;
-
     public:
-        Parser(const TokenList &tokenList, const FileIterator &fptr) : tokenList{tokenList}, fptr{fptr}, tokenIterator{nullptr} { globalFptr = (FileIterator *)&fptr; }
+        Parser(TokenList &tokenList) : tokenList{tokenList} {}
         ~Parser() {}
 
-        std::unique_ptr<ModuleUnit> ParseModule(const std::string &moduleName);
+        const Token &Next() { return *(tokenIterator++); }
+
+        // std::unique_ptr<ModuleUnit> ParseModule(const std::string &moduleName);
+        std::unique_ptr<BlockStatement<>> Parse();
 
         Statement ParseStatement();
         Statement ParseTopLevelScopeStatement();
@@ -2433,9 +2447,6 @@ namespace Parsing
         const Token &Expect(TokenType type);
         void PrintNode(const SyntaxNode &node, int index = 0, const std::wstring &indent = L"", bool last = false);
         void RecurseNode(const SyntaxNode &node);
-
-        static auto &GetFptr() { return *globalFptr; }
-        static auto &GetErrorList() { return errors; }
 
         void Use(Using toUse) { usings.set((uint64_t)toUse); }
         bool IsUsed(Using toUse) { return usings.test((uint64_t)toUse); }

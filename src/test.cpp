@@ -14,39 +14,43 @@
 //     return std::free(ptr);
 // }
 
-struct Object
+struct Base
 {
-    int i;
-    Object(int i) : i(i)
-    {
-        std::cout << "Created Object " << this << std::endl;
-    }
-    ~Object()
-    {
-        std::cout << "Destroyed Object " << this << std::endl;
-    }
+    Base() {}
+    virtual ~Base() {}
 };
 
-struct Other
+struct Derived : public Base
 {
-    std::shared_ptr<Object> obj;
-    Other(std::shared_ptr<Object> obj) : obj(obj) {}
-
-    void SetObject(std::shared_ptr<Object> obj)
-    {
-        this->obj = obj;
-    }
+    Derived() : Base() {}
+    virtual ~Derived() {}
 };
 
-std::unique_ptr<Object> func()
+struct Other : public Base
 {
-    return std::make_unique<Object>(6);
+    Other() : Base() {}
+    virtual ~Other() {}
+};
+
+void func(std::shared_ptr<Base> type)
+{
+    if (auto templ = std::dynamic_pointer_cast<Derived>(type))
+    {
+        std::cout << "Derived" << std::endl;
+    }
+    else if (auto templ = std::dynamic_pointer_cast<Other>(type))
+    {
+        std::cout << "Other" << std::endl;
+    }
+    else
+    {
+        std::cout << "Base" << std::endl;
+    }
 }
 
 int main()
 {
-    auto s = func();
-    // auto o = s;
-
-    std::cout << s << std::endl;
+    func(std::make_shared<Derived>());
+    func(std::make_shared<Other>());
+    func(std::make_shared<Base>());
 }

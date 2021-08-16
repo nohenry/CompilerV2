@@ -84,6 +84,6 @@ int main()
     // pass.run(mod->GetGen().GetModule());
     // dest.flush();
 
-    std::cout << "Code Value: " << numCodeValue << ", Code Type: " << numCodeType << std::endl;
+    // std::cout << "Code Value: " << numCodeValue << ", Code Type: " << numCodeType << std::endl;
     return 0;
 }

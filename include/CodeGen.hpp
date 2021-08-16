@@ -218,14 +218,14 @@ public:
         return children.find(name);
     }
 
-    const auto findSymbol(SymbolNode *child) const
+    const std::string findSymbol(SymbolNode *child) const
     {
         for (auto &c : children)
         {
             if (c.second == child)
                 return c.first;
         }
-        return std::string("");
+        return "";
     }
 
     auto IndexOf(std::unordered_map<std::string, SymbolNode *>::const_iterator node) const
@@ -542,6 +542,27 @@ public:
                 return tsym;
         return nullptr;
     }
+
+    // Iterate backwards the symbol tree to see if the specified symbol name  exits
+    std::string FindSymbolInScope(SymbolNode *symbol)
+    {
+        for (auto look = insertPoint; look != nullptr; look = look->parent)
+        {
+            auto current = look->findSymbol(symbol);
+            if (current != "")
+                return current;
+        }
+        return nullptr;
+    }
+
+    // template <IsSymbolNode T>
+    //  std::string  FindSymbolInScope(T *symbol)
+    // {
+    //     auto name = FindSymbolInScope(symbol)
+    //     if ()
+            
+    //     return nullptr;
+    // }
 
     const auto GetCurrentFunction() const
     {

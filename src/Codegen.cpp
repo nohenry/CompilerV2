@@ -355,12 +355,18 @@ std::shared_ptr<CodeValue> CodeGeneration::FollowDotChain(const SyntaxNode &node
                         }
                         else
                         {
-                            // Function cannot be called on non instance type
+                            ThrowCompilerError(
+                                ErrorType::FollowDotChain, ErrorCode::NonInstance,
+                                "Function must be called with instance value!",
+                                Range(bin.GetLHS().GetStart(), bin.GetRHS().GetEnd()));
                         }
                     }
                     else
                     {
-                        // TODO throw erro cannot access variable from non instance object
+                        ThrowCompilerError(
+                            ErrorType::FollowDotChain, ErrorCode::NonInstance,
+                            "Variable cannot be accessed from non instance value!",
+                            Range(bin.GetLHS().GetStart(), bin.GetRHS().GetEnd()));
                     }
                 }
             }
@@ -411,7 +417,10 @@ std::shared_ptr<CodeValue> CodeGeneration::FollowDotChain(const SyntaxNode &node
                 }
                 else
                 {
-                    // TODO throw error cannot find symbol x in y
+                    ThrowCompilerError(
+                        ErrorType::FollowDotChain, ErrorCode::CannotFind,
+                        std::string("Cannot find value ") + bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw + " in type " + templ->GetNode().GetParent()->findSymbol((SymbolNode *)&templNode),
+                        Range(bin.GetLHS().GetStart(), bin.GetRHS().GetEnd()));
                 }
             }
         }
@@ -456,7 +465,10 @@ std::shared_ptr<CodeValue> CodeGeneration::FollowDotChain(const SyntaxNode &node
             }
             else
             {
-                // TODO throw error cannot find symbol x in y
+                ThrowCompilerError(
+                    ErrorType::FollowDotChain, ErrorCode::CannotFind,
+                    std::string("Cannot find value ") + bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw + " in type " + templ->GetNode().GetParent()->findSymbol((SymbolNode *)&templNode),
+                    Range(bin.GetLHS().GetStart(), bin.GetRHS().GetEnd()));
             }
         }
     }
@@ -488,7 +500,8 @@ namespace Parsing
     {
         if (initializer && initializer->GetType() == SyntaxType::TemplateInitializer)
         {
-            auto symbol = gen.FindSymbolInScope(initializer->As<TemplateInitializer>().GetIdentifier().raw);
+            const auto &init = initializer->As<TemplateInitializer>();
+            auto symbol = gen.FindSymbolInScope(init.GetIdentifier().raw);
             if (symbol != nullptr && symbol->GetType() == SymbolNodeType::TemplateNode)
             {
                 auto &templ = symbol->As<TemplateNode>();
@@ -509,7 +522,10 @@ namespace Parsing
             }
             else
             {
-                // TODO throw error cannot find symbol
+                ThrowCompilerError(
+                    ErrorType::TemplateInitializer, ErrorCode::CannotFind,
+                    std::string("Cannot find type ") + init.GetIdentifier().raw + " in scope!",
+                    Range(init.GetIdentifier().GetStart(), init.GetIdentifier().GetEnd()));
             }
         }
         else if (initializer && initializer->GetType() == SyntaxType::ObjectInitializer)
@@ -563,7 +579,10 @@ namespace Parsing
                 type = gen.TypeType(*this->type); // Get type value from type annotation
             else
             {
-                // TODO throw error cannot determine type!
+                ThrowCompilerError(
+                    ErrorType::VariableDecleration, ErrorCode::CannotDetermine,
+                    "Cannot determine  the type of variable! Please provide a type or initializer.",
+                    Range(keyword.GetStart(), identifier.GetEnd()));
             }
 
             if (gen.GetInsertPoint()->GetType() == SymbolNodeType::ModuleNode) // In top level scope
@@ -582,7 +601,10 @@ namespace Parsing
                     }
                     else
                     {
-                        // TODO throw error initilizaer of global is not constant
+                        ThrowCompilerError(
+                            ErrorType::VariableDecleration, ErrorCode::Const,
+                            "The initializer of a const global varible must be constant!",
+                            Range(keyword.GetStart(), initializer->GetEnd()));
                     }
                 }
                 else if (keyword.type == TokenType::Let)
@@ -599,7 +621,10 @@ namespace Parsing
                     }
                     else
                     {
-                        // TODO throw error initilizaer of global is not constant
+                        ThrowCompilerError(
+                            ErrorType::VariableDecleration, ErrorCode::Const,
+                            "The initializer of a global varible must be constant!",
+                            Range(keyword.GetStart(), initializer->GetEnd()));
                     }
                 }
             }
@@ -625,7 +650,10 @@ namespace Parsing
                     }
                     else
                     {
-                        // TODO throw error const must have initiliazer
+                        ThrowCompilerError(
+                            ErrorType::VariableDecleration, ErrorCode::Const,
+                            "Const variable must have an initializer!",
+                            Range(keyword.GetStart(), GetEnd()));
                     }
                 }
                 else if (keyword.type == TokenType::Let)
@@ -1273,7 +1301,10 @@ namespace Parsing
                 break;
             }
         }
-        // TODO throw error identifier not found
+        ThrowCompilerError(
+            ErrorType::IdentifierExpression, ErrorCode::CannotFind,
+            "Symbol " + identifierToken.raw + " was not found in scope!",
+            Range(identifierToken.GetStart(), identifierToken.GetEnd()));
         return nullptr;
     }
 
@@ -1289,7 +1320,10 @@ namespace Parsing
 
             if (fnExpr->Function()->arg_size() != argSize)
             {
-                // TODO throw error arguments don't match
+                ThrowCompilerError(
+                    ErrorType::FunctionCall, ErrorCode::ArgMisMatch,
+                    "Function was expecting " + std::to_string(fnExpr->Function()->arg_size()) + " but " + std::to_string(arguments.size()) + "were found!",
+                    Range(GetStart(), GetEnd()));
                 return nullptr;
             }
 
@@ -1321,7 +1355,10 @@ namespace Parsing
             else
                 return std::make_shared<CodeValue>(call, fnExpr->type);
         }
-        // TODO throw error function callee is not function type!
+        ThrowCompilerError(
+            ErrorType::FunctionCall, ErrorCode::NonFunction,
+            "Called value isn't a function!",
+            Range(fn->GetStart(), fn->GetEnd()));
         return nullptr;
     }
 
@@ -1398,7 +1435,10 @@ namespace Parsing
 
         if (!checkFunc->empty())
         {
-            // TODO log error about function already existing
+            ThrowCompilerError(
+                ErrorType::FunctionDecleration, ErrorCode::AlreadyFound,
+                "Function or type with name " + identifier.raw + " was already found in scope!",
+                Range(GetStart(), GetEnd()));
         }
 
         if (found == gen.GetInsertPoint()->children.end() && found->second->GetType() != SymbolNodeType::FunctionNode)
@@ -1476,7 +1516,10 @@ namespace Parsing
             }
             else
             {
-                // TODO throw error about empty return statement with non void function
+                ThrowCompilerError(
+                    ErrorType::FunctionDecleration, ErrorCode::NoReturn,
+                    "Function with return type doesn't return a value!",
+                    Range(retType->GetStart(), retType->GetEnd()));
                 cfv->GetReturnLocation()->eraseFromParent();
                 gen.GetBuilder().CreateRet(llvm::Constant::getNullValue(funcVal->Function()->getFunctionType()->getReturnType()));
                 return nullptr;
@@ -1501,6 +1544,7 @@ namespace Parsing
         switch (gen.GetPreCodeGenPass())
         {
         case 1:
+        case 2:
         {
             std::shared_ptr<CodeType> funcReturnType;
             std::vector<std::shared_ptr<CodeType>> funcParameters;
@@ -1553,7 +1597,10 @@ namespace Parsing
         auto retType = static_cast<llvm::Function *>(gen.GetCurrentFunction()->value)->getFunctionType()->getReturnType();
         if (retType->getTypeID() == llvm::Type::VoidTyID && expression != nullptr)
         {
-            // TODO throw error returned value with a void function
+            ThrowCompilerError(
+                ErrorType::Return, ErrorCode::NoReturn,
+                "Function with return value in a function without a return type!",
+                Range(GetStart(), GetEnd()));
         }
         else if (expression)
         {
@@ -1568,7 +1615,10 @@ namespace Parsing
         }
         else
         {
-            // TODO throw error about empty return statement with non void function
+            ThrowCompilerError(
+                ErrorType::Return, ErrorCode::NoReturn,
+                "Return statement expecting value in function with return type!",
+                Range(GetStart(), GetEnd()));
             if (retType->isVoidTy())
                 gen.Return();
             else
@@ -1625,7 +1675,10 @@ namespace Parsing
         }
         else
         {
-            // TODO throw error if expression is not boolean
+            ThrowCompilerError(
+                ErrorType::IfStatement, ErrorCode::NotBoolean,
+                "If statement expression is not a boolean expression",
+                Range(expression->GetStart(), expression->GetEnd()));
         }
         return nullptr;
     }
@@ -1634,7 +1687,6 @@ namespace Parsing
     {
         // if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
         // {
-        //     // TODO throw error template name already found
         //     return nullptr;
         // }
         // auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
@@ -1665,7 +1717,10 @@ namespace Parsing
         {
             if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
             {
-                // TODO throw error template name already found
+                ThrowCompilerError(
+                    ErrorType::TemplateScope, ErrorCode::AlreadyFound,
+                    "Type or function with name " + identifier.raw + " was already found in scope!",
+                    Range(identifier.GetStart(), identifier.GetEnd()));
                 return;
             }
             auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
@@ -1734,7 +1789,10 @@ namespace Parsing
                 }
                 else
                 {
-                    // TODO throw error key value not found in template
+                    ThrowCompilerError(
+                        ErrorType::TemplateInitializer, ErrorCode::CannotFind,
+                        "Cannot find variable " + key + " in type " + identifier.raw + "!",
+                        Range(v->GetKey().GetStart(), v->GetValue().GetEnd()));
                 }
             }
             gen.SetCurrentVar(tempCurr);
@@ -1747,7 +1805,10 @@ namespace Parsing
         }
         else
         {
-            // TODO throw error can not find template
+            ThrowCompilerError(
+                ErrorType::TemplateInitializer, ErrorCode::CannotFind,
+                "Cannot create initializer for unkown template type " + identifier.raw + "!",
+                Range(identifier.GetStart(), identifier.GetEnd()));
         }
         return nullptr;
     }
@@ -1786,7 +1847,10 @@ namespace Parsing
                 }
                 else
                 {
-                    // TODO throw error key value not found in template
+                    ThrowCompilerError(
+                        ErrorType::TemplateInitializer, ErrorCode::CannotFind,
+                        "Cannot find variable " + key + " in type " + gen.FindSymbolInScope(&templ->GetNode()) + "!",
+                        Range(v->GetKey().GetStart(), v->GetValue().GetEnd()));
                 }
             }
         }
@@ -1913,7 +1977,7 @@ namespace Parsing
     {
         switch (gen.GetPreCodeGenPass())
         {
-        case 1:
+        case 2:
         {
             auto type = gen.TypeType(*templateType);
             auto specType = gen.TypeType(*this->specType);
@@ -1942,7 +2006,10 @@ namespace Parsing
 
                         if (found != specNode.children.end() && found->second->GetType() != SymbolNodeType::FunctionNode)
                         {
-                            // TODO throw error symbol is not a function in spec
+                            ThrowCompilerError(
+                                ErrorType::ActionSpecStatement, ErrorCode::NonFunction,
+                                "Symbol " + func.GetIdentifier().raw + " is not a function in spec " + gen.FindSymbolInScope(&specNode) + "!",
+                                Range(func.GetStart(), func.GetEnd()));
                         }
                         else if (found != specNode.children.end())
                         {
@@ -1969,13 +2036,19 @@ namespace Parsing
 
                             if (foundFunc.GetFunction()->GetFunctionType()->IsMember() != member)
                             {
-                                // TODO throw error spec implementatin argumetns not the same
+                                ThrowCompilerError(
+                                    ErrorType::ActionSpecStatement, ErrorCode::ArgMisMatch,
+                                    "Function arguments do not match spec function's arguments!",
+                                    Range(func.GetStart(), func.GetEnd()));
                                 break;
                             }
 
                             if (foundFunc.GetFunction()->GetFunctionType()->GetParameters().size() != func.GetParameters().size())
                             {
-                                // TODO throw erro function signarture does not match spec functions signature
+                                ThrowCompilerError(
+                                    ErrorType::ActionSpecStatement, ErrorCode::ArgMisMatch,
+                                    "Function arguments do not match spec function's arguments!",
+                                    Range(func.GetStart(), func.GetEnd()));
                                 break;
                             }
 
@@ -1984,9 +2057,12 @@ namespace Parsing
                                 for (size_t i = 1; i < funcParameters.size(); i++)
                                 {
                                     auto pType = gen.TypeType(*func.GetParameters()[i]->GetVariableType());
-                                    if (pType != foundFunc.GetFunction()->GetFunctionType()->GetParameters()[i])
+                                    if (*pType != *foundFunc.GetFunction()->GetFunctionType()->GetParameters()[i])
                                     {
-                                        // TODO throw error function signarture doesnt match spec signature
+                                        ThrowCompilerError(
+                                            ErrorType::ActionSpecStatement, ErrorCode::ArgMisMatch,
+                                            "Function arguments do not match spec function's arguments!",
+                                            Range(func.GetStart(), func.GetEnd()));
                                         break;
                                     }
                                 }
@@ -1996,18 +2072,32 @@ namespace Parsing
                                 for (size_t i = 0; i < funcParameters.size(); i++)
                                 {
                                     auto pType = gen.TypeType(*func.GetParameters()[i]->GetVariableType());
-                                    if (pType != foundFunc.GetFunction()->GetFunctionType()->GetParameters()[i])
+                                    if (*pType != *foundFunc.GetFunction()->GetFunctionType()->GetParameters()[i])
                                     {
-                                        // TODO throw error function signarture doesnt match spec signature
+                                        ThrowCompilerError(
+                                            ErrorType::ActionSpecStatement, ErrorCode::ArgMisMatch,
+                                            "Function arguments do not match spec function's arguments!",
+                                            Range(func.GetStart(), func.GetEnd()));
                                         break;
                                     }
                                 }
+                            }
+                            auto ret = std::dynamic_pointer_cast<FunctionCodeType>(foundFunc.GetFunction()->type)->GetReturnType();
+                            if (*gen.TypeType(*func.GetRetType()) != *ret)
+                            {
+                                ThrowCompilerError(
+                                    ErrorType::ActionSpecStatement, ErrorCode::ArgMisMatch,
+                                    "Function return type does not match spec function's return type!",
+                                    Range(func.GetRetType()->GetStart(), func.GetRetType()->GetEnd()));
                             }
                             // gen.GetInsertPoint()->AddChild<FunctionNode>(func.GetIdentifier().raw, new FunctionCodeValue(nullptr, retType, funcParameters, member));
                         }
                         else
                         {
-                            // TODO throw error function not in spec
+                            ThrowCompilerError(
+                                ErrorType::ActionSpecStatement, ErrorCode::CannotFind,
+                                "Function " + func.GetIdentifier().raw + " does not exist in spec!",
+                                Range(func.GetIdentifier().GetStart(), func.GetIdentifier().GetEnd()));
                         }
 
                         break;

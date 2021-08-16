@@ -537,7 +537,6 @@ namespace Parsing
                           std::vector<ObjectKeyValue *> values,
                           const Token &right) : left{left}, values{values}, right{right}
         {
-            std::cout << "Obj " <<  &left << std::endl;
         }
         virtual ~ObjectInitializer() {}
 

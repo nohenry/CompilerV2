@@ -17,6 +17,15 @@ entry:
   ret void
 }
 
+define private void @_ZN5input4main() {
+entry:
+  %o = alloca %input.Object, align 8
+  %0 = call %input.Object @_ZN5input6Object6create()
+  store %input.Object %0, %input.Object* %o, align 4
+  call void @_ZN5input6Object11doSomething(%input.Object* %o, i32 5)
+  ret void
+}
+
 define private %input.Object @_ZN5input6Object6create() {
 entry:
   %0 = alloca %input.Object, align 8
@@ -31,14 +40,7 @@ entry:
   ret %input.Object %5
 }
 
-define private void @_ZN5input4main() {
-entry:
-  %o = alloca %input.Object, align 8
-  %0 = call %input.Object @_ZN5input6Object6create()
-  store %input.Object %0, %input.Object* %o, align 4
-  call void @_ZN5input6Object11doSomething(%input.Object* %o, i32 5)
-  ret void
-}
+declare private void @_ZN5input4main.1()
 
 define i32 @main(i32 %0, i8** %1) {
 entry:

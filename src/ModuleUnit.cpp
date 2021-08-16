@@ -34,26 +34,75 @@ void ModuleUnit::Compile()
     parser = std::make_unique<Parser>(tokenList);
     auto syntaxTree = parser->Parse();
 
-    for (const auto &token : tokenList)
+    // for (const auto &token : tokenList)
+    // {
+    //     std::cout << token << " " << &token << std::endl;
+    // }
+
+    // parser->PrintNode(*syntaxTree);
+
+    try
     {
-        std::cout << token << " " << &token << std::endl;
+        generation = std::make_unique<CodeGeneration>(moduleName);
+        generation->Use(CodeGeneration::Using::NoBlock);
+
+        generation->SetPreCodeGenPass(0); // First pre gen pass (All types)
+        syntaxTree->PreCodeGen(*generation);
+
+        generation->SetPreCodeGenPass(1); // Second pre gen pass (All functions)
+        syntaxTree->PreCodeGen(*generation);
+
+        generation->SetPreCodeGenPass(2); // Second pre gen pass (Action spec functions)
+        syntaxTree->PreCodeGen(*generation);
+
+        // PrintSymbols(generation->rootSymbols);
+
+        auto gen = syntaxTree->CodeGen(*generation); // Generate the llvm code from the syntax tree
+        generation->GenerateMain();                  // Generate libc main
+    }
+    catch (BaseException &excep)
+    {
     }
 
-    parser->PrintNode(*syntaxTree);
+    for (auto e : errors)
+    {
+        auto pe = dynamic_cast<CompilerError *>(e);
+        if (pe->GetErrorCode() == ErrorCode::ExpectedType)
+        {
+            auto pet = dynamic_cast<ExpectedTypeError *>(e);
+            Logging::Error(color::bold(color::white("Unexpected token {}. Expected {}")), pet->GetFoundToken().raw.c_str(), TokenTypeString(pet->GetTokenType()));
+            if (pet->IsLeaf())
+                Logging::CharacterSnippet(fptr, pet->GetFoundToken().position);
+            Logging::Log("");
+            continue;
+        }
+        else if (pe->GetErrorCode() == ErrorCode::SampleSnippet)
+        {
+            auto pet = dynamic_cast<SampleSuggestion *>(e);
+            Logging::Log(color::bold(color::white("Try using the following:")));
+            Logging::SampleSnippet(fptr, pet->GetPosition(), pet->GetInsert());
+            Logging::Log("");
+            continue;
+        }
+        switch (pe->GetErrorType())
+        {
+        default:
+            if (pe->IsLeaf())
+            {
 
-    generation = std::make_unique<CodeGeneration>(moduleName);
-    generation->Use(CodeGeneration::Using::NoBlock);
+                Logging::Error(color::bold(color::white(pe->GetMessage())));
+                Logging::CharacterSnippet(fptr, pe->GetRange());
+            }
+            else
+            {
+                Logging::Error(pe->GetMessage());
+            }
+            Logging::Log("");
+            break;
+        }
+    }
 
-    generation->SetPreCodeGenPass(0); // First pre gen pass (All types)
-    syntaxTree->PreCodeGen(*generation);
-
-    generation->SetPreCodeGenPass(1); // Second pre gen pass (All functions)
-    syntaxTree->PreCodeGen(*generation);
-
-    auto gen = syntaxTree->CodeGen(*generation); // Generate the llvm code from the syntax tree
-    generation->GenerateMain();                  // Generate libc main
-
-    PrintSymbols(generation->rootSymbols);
+    // PrintSymbols(generation->rootSymbols);
 }
 
 void ModuleUnit::DumpIR()

@@ -9,7 +9,7 @@ template Object {
 }
 
 spec Create {
-    const create()
+    const create() => Object
 }
 
 action Object {

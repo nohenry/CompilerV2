@@ -25,8 +25,15 @@ enum class ErrorType
     SpecVariableDecleration,
     SampleSnippet,
     IfStatement,
+    VariableDecleration,
 
-    Cast
+    Cast,
+    FollowDotChain,
+    TemplateInitializer,
+    IdentifierExpression,
+    FunctionCall,
+    Return,
+    ActionSpecStatement
 };
 
 enum class ErrorCode
@@ -45,7 +52,17 @@ enum class ErrorCode
     ElseAfterElse,
     NoType,
 
-    NoImplicitCast
+    NoImplicitCast,
+    NonInstance,
+    CannotFind,
+    CannotDetermine,
+    Global,
+    Const,
+    ArgMisMatch,
+    NonFunction,
+    AlreadyFound,
+    NoReturn,
+    NotBoolean
 };
 
 class BaseException

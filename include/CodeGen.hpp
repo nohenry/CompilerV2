@@ -407,7 +407,7 @@ public:
     const auto GetTemplate() const { return templ; }
     void AddMember(llvm::Type *val) { members.push_back(val); }
     auto GetMembers() { return members; }
-
+    bool IsGeneric() const { return isGeneric; }
     // const auto &GetAction() const { return actions; }
     // void AddAction(ActionNode *action) { actions.push_back(action); }
 };

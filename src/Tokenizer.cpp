@@ -33,7 +33,7 @@ TokenList &Tokenizer::Tokenize()
         {
             if (c == '\n' || c == '\r' && (tokenList.size() == 0 || tokenList.back().type != TokenType::Newline))
             {
-                auto start = (tokenList.size() == 0 ? Position() : tokenList.back().position.end );
+                auto start = (tokenList.size() == 0 ? Position() : tokenList.back().position.end);
                 auto end = start;
                 end.character++;
                 tokenList.push_back(Token(TokenType::Newline, Range(start, end)));
@@ -85,10 +85,20 @@ Tokenizer::IterateType Tokenizer::IterateTrieRec(const TrieNode &node, bool use,
     auto f = fptr.Offset();
     if (use && node.term && node == c)
     {
+        if (node.GetType() == TokenType::LeftAngle)
+            angleIndex++;
+        else if (node.GetType() == TokenType::RightAngle)
+            angleIndex--;
+        else if (angleIndex > 0 && node.GetType() == TokenType::RightShift)
+        {
+            fptr--;
+            return std::make_tuple(TokenNull, s);
+        }
+
         auto str = std::string(TokenTypeString(node.GetType()));
         str[0] = tolower(str[0]);
         Token token(node.GetType(), Range(startPosition, pos), str);
-        return std::make_tuple(token, static_cast<uint8_t>(s + 1));
+        return std::make_tuple(token, s + 1);
     }
 
     fptr--;

@@ -1192,14 +1192,15 @@ namespace Parsing
 
     Expression Parser::ParseIdentifier()
     {
+        if((tokenIterator + 1)->type == TokenType::LeftAngle) {
+            auto type = ParseType();
+            if (type) {
+                return ParseTemplateInitializer(type);
+            }
+        }
         const Token &token = Next();
         switch (tokenIterator->type)
         {
-        // case TokenType::LeftParen:
-        //     return ParseFunctionCall(token);
-        case TokenType::LeftCurly:
-            if (!IsUsed(Using::If))
-                return ParseTemplateInitializer(token);
         default:
             return new IdentifierExpression(token);
         }
@@ -1284,12 +1285,12 @@ namespace Parsing
         return new SubscriptExpression(expr, left, subsr, right);
     }
 
-    Expression Parser::ParseTemplateInitializer(const Token &identifier)
+    Expression Parser::ParseTemplateInitializer(TypeSyntax *type)
     {
         auto initializer = ParseObjectInitializer();
         if (initializer->GetValues().empty())
             initializer = nullptr;
-        return new TemplateInitializer(identifier, initializer);
+        return new TemplateInitializer(type, initializer);
     }
 
     ArrayLiteralEntry *Parser::ParseArrayLiteralEntry()
@@ -1792,7 +1793,7 @@ std::ostream &operator<<(std::ostream &stream, const Parsing::SyntaxNode &node)
         }
         case Parsing::SyntaxType::TemplateInitializer:
         {
-            stream << " `" << node.As<Parsing::TemplateInitializer>().GetIdentifier().raw << "`";
+            // stream << " `" << node.As<Parsing::TemplateInitializer>().GetIdentifier().raw << "`";
             break;
         }
         case Parsing::SyntaxType::EnumStatement:

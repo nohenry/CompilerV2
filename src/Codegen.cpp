@@ -14,23 +14,23 @@
 #endif
 #include <codecvt>
 
-// std::string gen_random(const int len)
-// {
-//     std::string tmp_s;
-//     static const char alphanum[] =
-//         "0123456789"
-//         "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-//         "abcdefghijklmnopqrstuvwxyz";
+std::string gen_random(const int len)
+{
+    std::string tmp_s;
+    static const char alphanum[] =
+        "0123456789"
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+        "abcdefghijklmnopqrstuvwxyz";
 
-//     srand((unsigned)time(NULL));
+    srand((unsigned)time(NULL));
 
-//     tmp_s.reserve(len);
+    tmp_s.reserve(len);
 
-//     for (int i = 0; i < len; ++i)
-//         tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
+    for (int i = 0; i < len; ++i)
+        tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
 
-//     return tmp_s;
-// }
+    return tmp_s;
+}
 
 using namespace Parsing;
 
@@ -72,6 +72,7 @@ std::string LLVMTypeToString(std::shared_ptr<CodeType> base, llvm::Type *type)
     default:
         break;
     }
+    return "";
 }
 
 std::string TypeToString(std::shared_ptr<CodeType> type)
@@ -546,33 +547,40 @@ namespace Parsing
     {
         if (initializer && initializer->GetType() == SyntaxType::TemplateInitializer)
         {
-            const auto &init = initializer->As<TemplateInitializer>();
-            auto symbol = gen.FindSymbolInScope(init.GetIdentifier().raw);
-            if (symbol != nullptr && symbol->GetType() == SymbolNodeType::TemplateNode)
-            {
-                auto &templ = symbol->As<TemplateNode>();
-                if (keyword.type == TokenType::Const) // Constant variable
-                {
-                }
-                else if (keyword.type == TokenType::Let)
-                {
-                    auto inst = gen.CreateEntryBlockAlloca(templ.GetTemplate()->type, identifier.raw); // Allocate the variable on the stack
+            // const auto &init = initializer->As<TemplateInitializer>();
+            // auto symbol = gen.FindSymbolInScope(init.GetIdentifier().raw);
+            // if (symbol != nullptr && symbol->GetType() == SymbolNodeType::TemplateNode)
+            // {
+            //     auto &templ = symbol->As<TemplateNode>();
+            //     if (templ.IsGeneric())
+            //     {
 
-                    auto varValue = std::make_shared<CodeValue>(inst, templ.GetTemplate());
-                    gen.SetCurrentVar(varValue);
-                    initializer->CodeGen(gen);
+            //     }
+            //     else
+            //     {
+            //         if (keyword.type == TokenType::Const) // Constant variable
+            //         {
+            //         }
+            //         else if (keyword.type == TokenType::Let)
+            //         {
+            //             auto inst = gen.CreateEntryBlockAlloca(templ.GetTemplate()->type, identifier.raw); // Allocate the variable on the stack
 
-                    gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
-                    return varValue;
-                }
-            }
-            else
-            {
-                ThrowCompilerError(
-                    ErrorType::TemplateInitializer, ErrorCode::CannotFind,
-                    std::string("Cannot find type ") + init.GetIdentifier().raw + " in scope!",
-                    Range(init.GetIdentifier().GetStart(), init.GetIdentifier().GetEnd()));
-            }
+            //             auto varValue = std::make_shared<CodeValue>(inst, templ.GetTemplate());
+            //             gen.SetCurrentVar(varValue);
+            //             initializer->CodeGen(gen);
+
+            //             gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
+            //             return varValue;
+            //         }
+            //     }
+            // }
+            // else
+            // {
+            //     ThrowCompilerError(
+            //         ErrorType::TemplateInitializer, ErrorCode::CannotFind,
+            //         std::string("Cannot find type ") + init.GetTemplateType().raw + " in scope!",
+            //         Range(init.GetTemplateType().GetStart(), init.GetTemplateType().GetEnd()));
+            // }
         }
         else if (initializer && initializer->GetType() == SyntaxType::ObjectInitializer)
         {
@@ -1223,6 +1231,7 @@ namespace Parsing
                 break;
             }
         }
+        return nullptr;
     }
 
     std::shared_ptr<CodeValue> UnaryExpression::CodeGen(CodeGeneration &gen) const
@@ -1348,6 +1357,7 @@ namespace Parsing
 
     std::shared_ptr<CodeValue> PostfixExpression::CodeGen(CodeGeneration &gen) const
     {
+        return nullptr;
     }
 
     std::shared_ptr<CodeValue> IdentifierExpression::CodeGen(CodeGeneration &gen) const
@@ -1837,27 +1847,6 @@ namespace Parsing
 
     std::shared_ptr<CodeValue> TemplateStatement::CodeGen(CodeGeneration &gen) const
     {
-        // if (gen.GetInsertPoint()->findSymbol(identifier.raw) != gen.GetInsertPoint()->GetChildren().end())
-        // {
-        //     return nullptr;
-        // }
-        // auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
-
-        // auto fnScope = gen.NewScope<TemplateNode>(identifier.raw, structType);
-        // auto tValue = std::make_shared<TemplateCodeValue>(structType, *fnScope);
-
-        // if (gen.IsUsed(CodeGeneration::Using::Export))
-        //     fnScope->Export();
-
-        // gen.Use(CodeGeneration::Using::NoBlock);
-
-        // body->CodeGen(gen);
-
-        // structType->setBody(fnScope->GetMembers());
-
-        // gen.LastScope();
-        // return std::make_shared<CodeValue>(nullptr, tValue);
-
         return nullptr;
     }
 
@@ -1918,58 +1907,58 @@ namespace Parsing
 
     std::shared_ptr<CodeValue> TemplateInitializer::CodeGen(CodeGeneration &gen) const
     {
-        if (auto sym = gen.FindSymbolInScope<TemplateNode>(identifier.raw))
-        {
-            auto &children = sym->GetChildren();
-            auto values = body->GetValues();
-            llvm::Value *strc = nullptr;
-            if (gen.GetCurrentVar())
-                strc = gen.GetCurrentVar()->value;
-            else
-                strc = gen.CreateEntryBlockAlloca(sym->GetTemplate()->type, "");
-            auto tempCurr = gen.GetCurrentVar();
-            for (auto v : values)
-            {
-                const auto &key = v->GetKey().raw;
-                auto found = sym->findSymbol(key);
-                if (found != children.end() && found->second->GetType() == SymbolNodeType::VariableNode)
-                {
-                    int index = sym->IndexOf(found);
+        // if (auto sym = gen.FindSymbolInScope<TemplateNode>(identifier.raw))
+        // {
+        //     auto &children = sym->GetChildren();
+        //     auto values = body->GetValues();
+        //     llvm::Value *strc = nullptr;
+        //     if (gen.GetCurrentVar())
+        //         strc = gen.GetCurrentVar()->value;
+        //     else
+        //         strc = gen.CreateEntryBlockAlloca(sym->GetTemplate()->type, "");
+        //     auto tempCurr = gen.GetCurrentVar();
+        //     for (auto v : values)
+        //     {
+        //         const auto &key = v->GetKey().raw;
+        //         auto found = sym->findSymbol(key);
+        //         if (found != children.end() && found->second->GetType() == SymbolNodeType::VariableNode)
+        //         {
+        //             int index = sym->IndexOf(found);
 
-                    auto gep = gen.GetBuilder().CreateStructGEP(sym->GetTemplate()->type, strc, index);
-                    auto newVal = std::make_shared<CodeValue>(gep, found->second->As<VariableNode>().GetVariable()->type);
-                    gen.SetCurrentVar(newVal);
-                    auto init = v->GetValue().CodeGen(gen);
-                    if (init)
-                    {
-                        gen.SetCurrentRange(Range(v->GetStart(), v->GetEnd()));
-                        auto val = gen.Cast(init, dynamic_cast<VariableNode *>(found->second)->GetVariable()->type);
-                        gen.GetBuilder().CreateStore(val->value, gep);
-                    }
-                }
-                else
-                {
-                    ThrowCompilerError(
-                        ErrorType::TemplateInitializer, ErrorCode::CannotFind,
-                        "Cannot find variable " + key + " in type " + identifier.raw + "!",
-                        Range(v->GetKey().GetStart(), v->GetValue().GetEnd()));
-                }
-            }
-            gen.SetCurrentVar(tempCurr);
-            if (!gen.GetCurrentVar())
-            {
-                return std::make_shared<CodeValue>(gen.GetBuilder().CreateLoad(sym->GetTemplate()->type, strc), sym->GetTemplate());
-            }
-            else
-                return nullptr;
-        }
-        else
-        {
-            ThrowCompilerError(
-                ErrorType::TemplateInitializer, ErrorCode::CannotFind,
-                "Cannot create initializer for unkown template type " + identifier.raw + "!",
-                Range(identifier.GetStart(), identifier.GetEnd()));
-        }
+        //             auto gep = gen.GetBuilder().CreateStructGEP(sym->GetTemplate()->type, strc, index);
+        //             auto newVal = std::make_shared<CodeValue>(gep, found->second->As<VariableNode>().GetVariable()->type);
+        //             gen.SetCurrentVar(newVal);
+        //             auto init = v->GetValue().CodeGen(gen);
+        //             if (init)
+        //             {
+        //                 gen.SetCurrentRange(Range(v->GetStart(), v->GetEnd()));
+        //                 auto val = gen.Cast(init, dynamic_cast<VariableNode *>(found->second)->GetVariable()->type);
+        //                 gen.GetBuilder().CreateStore(val->value, gep);
+        //             }
+        //         }
+        //         else
+        //         {
+        //             ThrowCompilerError(
+        //                 ErrorType::TemplateInitializer, ErrorCode::CannotFind,
+        //                 "Cannot find variable " + key + " in type " + identifier.raw + "!",
+        //                 Range(v->GetKey().GetStart(), v->GetValue().GetEnd()));
+        //         }
+        //     }
+        //     gen.SetCurrentVar(tempCurr);
+        //     if (!gen.GetCurrentVar())
+        //     {
+        //         return std::make_shared<CodeValue>(gen.GetBuilder().CreateLoad(sym->GetTemplate()->type, strc), sym->GetTemplate());
+        //     }
+        //     else
+        //         return nullptr;
+        // }
+        // else
+        // {
+        //     ThrowCompilerError(
+        //         ErrorType::TemplateInitializer, ErrorCode::CannotFind,
+        //         "Cannot create initializer for unkown template type " + identifier.raw + "!",
+        //         Range(identifier.GetStart(), identifier.GetEnd()));
+        // }
         return nullptr;
     }
 

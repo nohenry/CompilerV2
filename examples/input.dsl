@@ -44,5 +44,8 @@ template Object<T> {
 }
 
 const main() => {
-    
+    let o = Object<Other<int>> {
+        f: 6,
+        x: true
+    }
 }

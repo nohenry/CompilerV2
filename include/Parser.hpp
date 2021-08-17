@@ -26,7 +26,7 @@ namespace Parsing
     {
     public:
         virtual ~ExpressionSyntax() {}
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const = 0;
+        // virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const = 0;
     };
 
     using Expression = ExpressionSyntax *;
@@ -572,11 +572,11 @@ namespace Parsing
     class TemplateInitializer : public ExpressionSyntax
     {
     private:
-        const Token &identifier;
+        TypeSyntax *type;
         ObjectInitializer *body;
 
     public:
-        TemplateInitializer(const Token &identifier, ObjectInitializer *body) : identifier{identifier}, body{body}
+        TemplateInitializer(TypeSyntax *type, ObjectInitializer *body) : type{type}, body{body}
         {
         }
         virtual ~TemplateInitializer() {}
@@ -585,17 +585,24 @@ namespace Parsing
 
         virtual const uint8_t NumChildren() const override
         {
-            return body == nullptr ? 0 : 1;
+            return (type == nullptr ? 0 : 1) + (body == nullptr ? 0 : 1);
         }
 
         virtual const SyntaxNode &operator[](int index) const override
         {
-            return *body;
+            switch (index)
+            {
+            case 0:
+                return *type;
+
+            default:
+                return *body;
+            }
         }
 
         virtual const Position &GetStart() const override
         {
-            return identifier.GetStart();
+            return type->GetStart();
         }
 
         virtual const Position &GetEnd() const override
@@ -605,7 +612,7 @@ namespace Parsing
 
         virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
 
-        const auto &GetIdentifier() const { return identifier; }
+        const auto &GetTemplateType() const { return *type; }
         const auto &GetBody() const { return *body; }
     };
 
@@ -615,8 +622,6 @@ namespace Parsing
         virtual ~ArrayLiteralEntry() {}
         virtual const ExpressionSyntax &GetExpression() const = 0;
         virtual const uint64_t GetLength() const { return 1; };
-
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const = 0;
     };
 
     class ArrayLiteralExpressionEntry : public ArrayLiteralEntry
@@ -701,7 +706,7 @@ namespace Parsing
             return boundary->GetEnd();
         }
 
-        virtual const uint64_t GetLength() const
+        virtual const uint64_t GetLength() const override
         {
             if (boundary->GetType() == SyntaxType::Integer)
                 return boundary->As<IntegerSyntax>().GetValue();
@@ -709,7 +714,7 @@ namespace Parsing
                 return 0;
         };
 
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const { return expression->CodeGen(gen); }
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override { return expression->CodeGen(gen); }
 
         const ExpressionSyntax &GetExpression() const override { return *expression; }
         const auto &GetColon() const { return colon; }
@@ -1089,7 +1094,7 @@ namespace Parsing
     {
     public:
         virtual ~StatementSyntax() {}
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const = 0;
+        // virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const = 0;
     };
 
     using Statement = StatementSyntax *;
@@ -1238,8 +1243,6 @@ namespace Parsing
             }
         }
 
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
-
         const auto &GetGetArrow() const { return getArrow; }
         const auto &GetGetStatement() const { return *get; }
         const auto &GetSetArrow() const { return setArrow; }
@@ -1284,8 +1287,6 @@ namespace Parsing
         {
             return right.GetEnd();
         }
-
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetLeft() const { return left; }
         const auto &GetGet() const { return get; }
@@ -1744,8 +1745,6 @@ namespace Parsing
             return body->GetEnd();
         }
 
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
-
         const auto &GetLeftParen() const { return left; }
         const auto &GetParameters() const { return parameters; }
         const auto &GetRightParen() const { return right; }
@@ -1977,8 +1976,6 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
-
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expression; }
     };
@@ -2121,8 +2118,6 @@ namespace Parsing
             return identifier.GetEnd();
         }
 
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
-
         const auto &GetIdentifier() const { return identifier; }
     };
 
@@ -2165,8 +2160,6 @@ namespace Parsing
         {
             return body->GetEnd();
         }
-
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
@@ -2227,8 +2220,6 @@ namespace Parsing
                 return identifier.GetEnd();
         }
 
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
-
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }
         const auto &GetGeneric() const { return *generic; }
@@ -2281,8 +2272,6 @@ namespace Parsing
             return stmt->GetEnd();
         }
 
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const {}
-
         const auto &GetExpression() const { return *expr; }
         const auto &GetArrow() const { return arrow; }
         const auto &GetSatement() const { return *stmt; }
@@ -2331,8 +2320,6 @@ namespace Parsing
         {
             return entries->GetEnd();
         }
-
-        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override {}
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetExpression() const { return *expr; }
@@ -2444,7 +2431,7 @@ namespace Parsing
         Expression ParseFunctionCall(Expression fn);
         Expression ParseAnonymousFunction();
         Expression ParseSubscript(Expression expr);
-        Expression ParseTemplateInitializer(const Token &);
+        Expression ParseTemplateInitializer(TypeSyntax *type);
         Expression ParseArrayLiteral();
         Expression ParseMatch();
 

@@ -17,6 +17,7 @@ private:
     TokenList tokenList;
     FileIterator &fptr;
     bool dirty = false;
+    int angleIndex = 0;
 
 public:
     Tokenizer(FileIterator &fptr) : fptr{fptr} {}

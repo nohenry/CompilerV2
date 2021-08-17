@@ -6,9 +6,11 @@
 #include <iostream>
 #include <cassert>
 #include <vector>
+#include <memory>
 
 struct Position;
 class CodeGeneration;
+struct CodeValue;
 
 namespace Parsing
 {
@@ -80,6 +82,7 @@ namespace Parsing
         const virtual uint8_t NumChildren() const = 0;
         const virtual SyntaxNode &operator[](int index) const = 0;
 
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const { return nullptr; }
         virtual void PreCodeGen(CodeGeneration &gen) const {}
 
         virtual const Position &GetStart() const = 0;

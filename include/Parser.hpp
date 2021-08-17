@@ -614,6 +614,9 @@ namespace Parsing
     public:
         virtual ~ArrayLiteralEntry() {}
         virtual const ExpressionSyntax &GetExpression() const = 0;
+        virtual const uint64_t GetLength() const { return 1; };
+
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const = 0;
     };
 
     class ArrayLiteralExpressionEntry : public ArrayLiteralEntry
@@ -649,7 +652,7 @@ namespace Parsing
             return expression->GetEnd();
         }
 
-        // virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override { return expression->CodeGen(gen); }
 
         const ExpressionSyntax &GetExpression() const override { return *expression; }
     };
@@ -695,10 +698,18 @@ namespace Parsing
 
         virtual const Position &GetEnd() const override
         {
-            return expression->GetEnd();
+            return boundary->GetEnd();
         }
 
-        // virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
+        virtual const uint64_t GetLength() const
+        {
+            if (boundary->GetType() == SyntaxType::Integer)
+                return boundary->As<IntegerSyntax>().GetValue();
+            else
+                return 0;
+        };
+
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const { return expression->CodeGen(gen); }
 
         const ExpressionSyntax &GetExpression() const override { return *expression; }
         const auto &GetColon() const { return colon; }

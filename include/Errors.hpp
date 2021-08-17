@@ -33,7 +33,9 @@ enum class ErrorType
     IdentifierExpression,
     FunctionCall,
     Return,
-    ActionSpecStatement
+    ActionSpecStatement,
+    ArrayLiteral,
+    Subscript
 };
 
 enum class ErrorCode
@@ -62,7 +64,8 @@ enum class ErrorCode
     NonFunction,
     AlreadyFound,
     NoReturn,
-    NotBoolean
+    NotBoolean,
+    NotIntegral
 };
 
 class BaseException

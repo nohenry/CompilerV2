@@ -19,6 +19,7 @@
 namespace Parsing
 {
     class SyntaxNode;
+    class GenericParameter;
 } // namespace Parsing
 
 extern size_t numCodeType;
@@ -173,6 +174,21 @@ struct SpecCodeType : public CodeType
     }
 
     SpecNode &GetNode() { return node; }
+};
+
+struct ArrayCodeType : public CodeType
+{
+    std::shared_ptr<CodeType> baseType;
+
+    ArrayCodeType(llvm::Type *type, std::shared_ptr<CodeType> baseType) : CodeType(type), baseType{baseType}
+    {
+    }
+
+    virtual ~ArrayCodeType()
+    {
+    }
+
+    std::shared_ptr<CodeType> GetBaseType() { return baseType; }
 };
 
 class CodeGeneration;
@@ -360,9 +376,13 @@ class TemplateNode : public SymbolNode
 private:
     std::shared_ptr<TemplateCodeType> templ;
     std::vector<llvm::Type *> members;
+    bool isGeneric = false;
+    Parsing::GenericParameter *generic = nullptr;
 
 public:
     TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{std::make_shared<TemplateCodeType>(templ, *this)} {}
+    TemplateNode(SymbolNode *parent, Parsing::GenericParameter *generic) : SymbolNode{parent}, templ{nullptr}, generic{generic}, isGeneric{true} {}
+
     virtual ~TemplateNode()
     {
     }
@@ -477,6 +497,7 @@ public:
     std::shared_ptr<CodeValue> Cast(std::shared_ptr<CodeValue> value, std::shared_ptr<CodeType> toType, bool implicit = true);
     static uint8_t GetNumBits(uint64_t val);
     std::shared_ptr<TemplateCodeType> TypeFromObjectInitializer(const Parsing::SyntaxNode &object);
+    std::shared_ptr<CodeType> TypeFromArrayInitializer(const Parsing::SyntaxNode &object);
     std::shared_ptr<CodeValue> FollowDotChain(const Parsing::SyntaxNode &);
 
     void GenerateMain();
@@ -560,7 +581,7 @@ public:
     // {
     //     auto name = FindSymbolInScope(symbol)
     //     if ()
-            
+
     //     return nullptr;
     // }
 

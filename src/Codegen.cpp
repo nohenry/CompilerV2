@@ -129,8 +129,9 @@ std::shared_ptr<CodeType> CodeGeneration::LiteralType(const SyntaxNode &node)
 
         if (arr.GetValues().size() > 0)
         {
-            auto type = LiteralType(arr.GetValues()[0]->GetExpression());
-            return std::make_shared<CodeType>(llvm::ArrayType::get(type->type, node.As<ArrayLiteral>().GetValues().size() + 1));
+            // auto type = LiteralType(arr.GetValues()[0]->GetExpression());
+            // return std::make_shared<CodeType>(llvm::ArrayType::get(type->type, node.As<ArrayLiteral>().GetValues().size() + 1));
+            return TypeFromArrayInitializer(node);
         }
         else
         {
@@ -313,6 +314,51 @@ std::shared_ptr<TemplateCodeType> CodeGeneration::TypeFromObjectInitializer(cons
         }
         structType->setBody(types);
         return std::make_shared<TemplateCodeType>(structType, *node);
+    }
+    return nullptr;
+}
+
+std::shared_ptr<CodeType> CodeGeneration::TypeFromArrayInitializer(const SyntaxNode &object)
+{
+    if (object.GetType() == SyntaxType::ArrayLiteral)
+    {
+        const auto &init = object.As<ArrayLiteral>();
+
+        std::shared_ptr<CodeType> currentType;
+        uint64_t len = 0;
+
+        for (const auto val : init.GetValues())
+        {
+            auto valLen = val->GetLength();
+            if (valLen == 0)
+            {
+                ThrowCompilerError(
+                    ErrorType::ArrayLiteral, ErrorCode::Const,
+                    "Array literal length must be const!",
+                    Range(val->GetStart(), val->GetEnd()));
+            }
+            if (!currentType)
+                currentType = LiteralType(val->GetExpression());
+            else
+            {
+                auto next = LiteralType(val->GetExpression());
+                auto cType = currentType->type->getTypeID();
+                auto nType = next->type->getTypeID();
+                if (cType == llvm::Type::IntegerTyID && nType == llvm::Type::IntegerTyID)
+                {
+                    if (currentType->type->getIntegerBitWidth() < next->type->getIntegerBitWidth())
+                        currentType = next;
+                }
+                else if (cType == llvm::Type::FloatTyID && nType == llvm::Type::DoubleTyID)
+                    currentType = next;
+                else
+                    Cast(val->CodeGen(*this), currentType);
+            }
+        }
+        auto arr = llvm::ArrayType::get(currentType->type, init.GetValues().size());
+        return std::make_shared<ArrayCodeType>(arr, currentType);
+        // structType->setBody(types);
+        // return std::make_shared<TemplateCodeType>(structType, *node);
     }
     return nullptr;
 }
@@ -538,6 +584,47 @@ namespace Parsing
                 else if (keyword.type == TokenType::Let)
                 {
                     auto type = gen.TypeFromObjectInitializer(*initializer);
+                    auto inst = gen.CreateEntryBlockAlloca(type->type, identifier.raw); // Allocate the variable on the stack
+
+                    auto varValue = std::make_shared<CodeValue>(inst, type);
+                    gen.SetCurrentVar(varValue);
+
+                    initializer->CodeGen(gen);
+
+                    gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
+                    return varValue;
+                }
+            }
+            else
+            {
+                if (keyword.type == TokenType::Const) // Constant variable
+                {
+                }
+                else if (keyword.type == TokenType::Let)
+                {
+                    auto inst = gen.CreateEntryBlockAlloca(gen.TypeType(*this->type)->type, identifier.raw); // Allocate the variable on the stack
+
+                    auto varValue = std::make_shared<CodeValue>(inst, gen.TypeType(*this->type));
+                    gen.SetCurrentVar(varValue);
+
+                    initializer->CodeGen(gen);
+
+                    gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, varValue); // Insert variable into symbol tree
+                    return varValue;
+                }
+                return nullptr;
+            }
+        }
+        else if (initializer && initializer->GetType() == SyntaxType::ArrayLiteral)
+        {
+            if (type == nullptr)
+            {
+                if (keyword.type == TokenType::Const) // Constant variable
+                {
+                }
+                else if (keyword.type == TokenType::Let)
+                {
+                    auto type = gen.TypeFromArrayInitializer(*initializer);
                     auto inst = gen.CreateEntryBlockAlloca(type->type, identifier.raw); // Allocate the variable on the stack
 
                     auto varValue = std::make_shared<CodeValue>(inst, type);
@@ -1364,38 +1451,101 @@ namespace Parsing
 
     std::shared_ptr<CodeValue> SubscriptExpression::CodeGen(CodeGeneration &gen) const
     {
+        bool isReference = gen.IsUsed(CodeGeneration::Using::Reference);
+        gen.Use(CodeGeneration::Using::Reference);
+
+        auto expression = expr->CodeGen(gen);
+
+        if (!isReference)
+            gen.UnUse(CodeGeneration::Using::Reference);
+
+        auto subscript = subsr->CodeGen(gen);
+
+        if (subscript->type->type->isIntegerTy())
+        {
+            std::vector<llvm::Value *> idxs = {llvm::ConstantInt::get(llvm::IntegerType::get(gen.GetContext(), 64), 0), subscript->value};
+            auto gep = gen.GetBuilder().CreateInBoundsGEP(expression->value, idxs);
+            // auto gep = gen.GetBuilder().CreateConstInBoundsGEP2_32(nullptr, expression->value, subscript->value);
+            if (isReference)
+                return std::make_shared<CodeValue>(gep, std::dynamic_pointer_cast<ArrayCodeType>(expression->type)->GetBaseType());
+            else
+                return std::make_shared<CodeValue>(gen.GetBuilder().CreateLoad(expression->type->type, gep), std::dynamic_pointer_cast<ArrayCodeType>(expression->type)->GetBaseType());
+        }
+        else
+        {
+            ThrowCompilerError(
+                ErrorType::Subscript, ErrorCode::NotIntegral,
+                "Subscript expression does not contain integral type!",
+                Range(subsr->GetStart(), subsr->GetEnd()));
+        }
     }
 
     std::shared_ptr<CodeValue> CastExpression::CodeGen(CodeGeneration &gen) const
     {
+        auto type = gen.TypeType(*this->type);
+        auto expr = this->LHS->CodeGen(gen);
+        return gen.Cast(expr, type, false);
     }
 
     std::shared_ptr<CodeValue> ArrayLiteral::CodeGen(CodeGeneration &gen) const
     {
-        auto type = static_cast<llvm::ArrayType *>(gen.LiteralType(*this)->type);
-        std::vector<const llvm::Value *> vals;
-        for (auto v : values)
+        // auto type = static_cast<llvm::ArrayType *>(gen.LiteralType(*this)->type);
+        llvm::Value *strc = nullptr;
+        std::shared_ptr<CodeType> type;
+        if (gen.GetCurrentVar())
         {
-            switch (v->GetType())
-            {
-            case SyntaxType::ArrayLiteralExpressionEntry:
-            {
-                auto expr = v->As<ArrayLiteralExpressionEntry>().GetExpression().CodeGen(gen);
-                vals.push_back(expr->value);
-                break;
-            }
-            case SyntaxType::ArrayLiteralBoundaryEntry:
-                /* code */
-                break;
-
-            default:
-                break;
-            }
+            strc = gen.GetCurrentVar()->value;
+            type = gen.GetCurrentVar()->type;
+        }
+        else
+        {
+            type = gen.LiteralType(*this);
+            strc = gen.CreateEntryBlockAlloca(type->type, "");
         }
 
-        // auto variable = new llvm::AllocaInst(
-        //     I, "array_size", funcEntry);
-        // return std::make_shared<CodeValue>(llvm::makeArrayRef(vals), std::make_shared<CodeType>(type));
+        if (auto arrType = std::dynamic_pointer_cast<ArrayCodeType>(type))
+        {
+            int index = 0;
+
+            auto tempCurr = gen.GetCurrentVar();
+            for (auto v : values)
+            {
+                switch (v->GetType())
+                {
+                case SyntaxType::ArrayLiteralExpressionEntry:
+                {
+                    auto expr = v->As<ArrayLiteralExpressionEntry>().GetExpression().CodeGen(gen);
+                    auto gep = gen.GetBuilder().CreateStructGEP(type->type, strc, index++);
+                    auto val = gen.Cast(v->CodeGen(gen), arrType->GetBaseType());
+                    gen.GetBuilder().CreateStore(val->value, gep);
+                    break;
+                }
+                case SyntaxType::ArrayLiteralBoundaryEntry:
+                {
+                    auto &bound = v->As<ArrayLiteralBoundaryEntry>();
+                    auto expr = bound.GetExpression().CodeGen(gen);
+                    auto size = bound.GetBoundary().CodeGen(gen);
+
+                    for (int i = 0; i < bound.GetLength(); i++)
+                    {
+                        auto gep = gen.GetBuilder().CreateStructGEP(type->type, strc, index++);
+                        auto val = gen.Cast(v->CodeGen(gen), arrType->GetBaseType());
+                        gen.GetBuilder().CreateStore(val->value, gep);
+                    }
+                    break;
+                }
+                default:
+                    break;
+                }
+            }
+            gen.SetCurrentVar(tempCurr);
+
+            if (!gen.GetCurrentVar())
+                return std::make_shared<CodeValue>(gen.GetBuilder().CreateLoad(type->type, strc), type);
+        }
+        // std::vector<const llvm::Value *> vals;
+
+        return nullptr;
     }
 
     std::shared_ptr<CodeValue> StringSyntax::CodeGen(CodeGeneration &gen) const
@@ -1543,8 +1693,10 @@ namespace Parsing
     {
         switch (gen.GetPreCodeGenPass())
         {
-        case 1:
         case 2:
+            if (gen.GetInsertPoint()->GetType() != SymbolNodeType::TemplateNode)
+                break;
+        case 3:
         {
             std::shared_ptr<CodeType> funcReturnType;
             std::vector<std::shared_ptr<CodeType>> funcParameters;
@@ -1723,9 +1875,16 @@ namespace Parsing
                     Range(identifier.GetStart(), identifier.GetEnd()));
                 return;
             }
-            auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
+            if (generic)
+            {
+                gen.NewScope<TemplateNode>(identifier.raw, generic);
+            }
+            else
+            {
+                auto structType = llvm::StructType::create(gen.GetContext(), gen.GenerateMangledTypeName(identifier.raw));
+                gen.NewScope<TemplateNode>(identifier.raw, structType);
+            }
 
-            auto fnScope = gen.NewScope<TemplateNode>(identifier.raw, structType);
             gen.LastScope();
             break;
         }
@@ -1744,7 +1903,8 @@ namespace Parsing
 
                 body->CodeGen(gen);
 
-                fnScope.GetTemplate()->Template()->setBody(fnScope.GetMembers());
+                if (!generic)
+                    fnScope.GetTemplate()->Template()->setBody(fnScope.GetMembers());
 
                 gen.LastScope();
             }
@@ -1919,7 +2079,7 @@ namespace Parsing
     {
         switch (gen.GetPreCodeGenPass())
         {
-        case 1:
+        case 2:
         {
             auto type = gen.TypeType(*templateType);
             auto lastScope = gen.GetInsertPoint();
@@ -1977,7 +2137,7 @@ namespace Parsing
     {
         switch (gen.GetPreCodeGenPass())
         {
-        case 2:
+        case 3:
         {
             auto type = gen.TypeType(*templateType);
             auto specType = gen.TypeType(*this->specType);
@@ -2173,7 +2333,7 @@ namespace Parsing
             gen.LastScope();
             break;
         }
-        case 1:
+        case 2:
         {
             // auto scope = gen.NewScope<SpecNode>(identifier.raw);
             auto found = gen.GetInsertPoint()->findSymbol(identifier.raw);

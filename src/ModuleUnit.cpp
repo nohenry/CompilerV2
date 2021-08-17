@@ -39,24 +39,27 @@ void ModuleUnit::Compile()
     //     std::cout << token << " " << &token << std::endl;
     // }
 
-    // parser->PrintNode(*syntaxTree);
+    parser->PrintNode(*syntaxTree);
 
     try
     {
         generation = std::make_unique<CodeGeneration>(moduleName);
-        generation->Use(CodeGeneration::Using::NoBlock);
 
         generation->SetPreCodeGenPass(0); // First pre gen pass (All types)
         syntaxTree->PreCodeGen(*generation);
 
-        generation->SetPreCodeGenPass(1); // Second pre gen pass (All functions)
+        generation->SetPreCodeGenPass(1); // Second pre gen pass (Template members)
         syntaxTree->PreCodeGen(*generation);
 
-        generation->SetPreCodeGenPass(2); // Second pre gen pass (Action spec functions)
+        generation->SetPreCodeGenPass(2); // Second pre gen pass (Spec functions)
         syntaxTree->PreCodeGen(*generation);
 
-        // PrintSymbols(generation->rootSymbols);
+        generation->SetPreCodeGenPass(3); // Second pre gen pass (Action functions)
+        syntaxTree->PreCodeGen(*generation);
 
+        PrintSymbols(generation->rootSymbols);
+
+        generation->Use(CodeGeneration::Using::NoBlock);
         auto gen = syntaxTree->CodeGen(*generation); // Generate the llvm code from the syntax tree
         generation->GenerateMain();                  // Generate libc main
     }

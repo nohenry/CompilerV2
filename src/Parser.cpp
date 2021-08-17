@@ -1098,14 +1098,17 @@ namespace Parsing
                 if ((tokenIterator + 1)->type == TokenType::Let || ((tokenIterator + 1)->type == TokenType::RightParen && (tokenIterator + 2)->type == TokenType::FuncArrow))
                     return left;
                 left = ParseFunctionCall(left);
+                return ParseExpression(0, left);
                 break;
             case TokenType::LeftSquare:
                 left = ParseSubscript(left);
+                return ParseExpression(0, left);
                 break;
 
             default:
                 const Token &op = Next();
                 left = new PostfixExpression(left, op);
+                return ParseExpression(0, left);
                 break;
             }
         }

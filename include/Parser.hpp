@@ -318,7 +318,7 @@ namespace Parsing
         }
 
         // const auto &GetBaseType() const { return *type; }
-        auto GetBaseType() { return type; }
+        auto GetBaseType() const { return type; }
         const auto &GetLeft() const { return left; }
         const auto &GetArguments() const { return arguments; }
         const auto &GetRight() const { return right; }
@@ -2219,6 +2219,9 @@ namespace Parsing
             else
                 return identifier.GetEnd();
         }
+
+        // virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
+        virtual void PreCodeGen(CodeGeneration &gen) const override;
 
         const auto &GetKeyword() const { return keyword; }
         const auto &GetIdentifier() const { return identifier; }

@@ -20,6 +20,7 @@ namespace Parsing
 {
     class SyntaxNode;
     class GenericParameter;
+    class GenericType;
 } // namespace Parsing
 
 extern size_t numCodeType;
@@ -301,6 +302,12 @@ public:
     template <typename T>
     T &As() { return *dynamic_cast<T *>(this); }
 
+    template <typename T>
+    const T *Cast() const { return dynamic_cast<const T *>(this); }
+
+    template <typename T>
+    T *Cast() { return dynamic_cast<T *>(this); }
+
     void Export() { isExported = true; }
     void NoExport() { isExported = false; }
     bool IsExported() const { return isExported; }
@@ -378,10 +385,14 @@ private:
     std::vector<llvm::Type *> members;
     bool isGeneric = false;
     Parsing::GenericParameter *generic = nullptr;
+    std::vector<std::shared_ptr<CodeType>> genericParameters;
+    Parsing::SyntaxNode *body = nullptr;
 
 public:
     TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{std::make_shared<TemplateCodeType>(templ, *this)} {}
-    TemplateNode(SymbolNode *parent, Parsing::GenericParameter *generic) : SymbolNode{parent}, templ{nullptr}, generic{generic}, isGeneric{true} {}
+    TemplateNode(SymbolNode *parent, Parsing::GenericParameter *generic, Parsing::SyntaxNode *body) : SymbolNode{parent}, templ{nullptr}, generic{generic}, isGeneric{true}, body{body} {}
+    TemplateNode(SymbolNode *parent, const std::vector<std::shared_ptr<CodeType>> &genericParameters) : SymbolNode{parent}, templ{nullptr}, genericParameters{genericParameters} {}
+    TemplateNode(SymbolNode *parent, TemplateNode &node, llvm::StructType *templ) : SymbolNode(parent), templ{std::make_shared<TemplateCodeType>(templ, *this)}, members{node.members}, genericParameters{node.genericParameters} {}
 
     virtual ~TemplateNode()
     {
@@ -408,6 +419,8 @@ public:
     void AddMember(llvm::Type *val) { members.push_back(val); }
     auto GetMembers() { return members; }
     bool IsGeneric() const { return isGeneric; }
+    auto GetGeneric() const { return generic; }
+    const auto GetBody() const { return body; }
     // const auto &GetAction() const { return actions; }
     // void AddAction(ActionNode *action) { actions.push_back(action); }
 };
@@ -415,11 +428,28 @@ public:
 class TypeAliasNode : public SymbolNode
 {
 private:
+    std::shared_ptr<CodeType> type;
+    Parsing::GenericParameter *generic = nullptr;
+    bool isGeneric = false;
+    Parsing::SyntaxNode *body = nullptr;
+    // std::vector<std::shared_ptr<CodeType>> genericParameters;
+
 public:
     TypeAliasNode(SymbolNode *parent) : SymbolNode{parent} {}
+    TypeAliasNode(SymbolNode *parent, Parsing::GenericParameter *generic, Parsing::SyntaxNode *body) : SymbolNode{parent}, generic{generic}, isGeneric{true}, body{body} {}
+    TypeAliasNode(SymbolNode *parent, TypeAliasNode &node) : TypeAliasNode(node) {}
     virtual ~TypeAliasNode() {}
 
     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::TypeAliasNode; }
+
+    auto GetReferencedType() const { return type; }
+    auto SetReferencedType(std::shared_ptr<CodeType> type) { this->type = type; }
+
+    bool IsGeneric() const { return isGeneric; }
+    // const auto &GetGenericParameters() const { return genericParameters; }
+
+    const auto GetGeneric() const { return generic; }
+    const auto GetBody() const { return body; }
 };
 
 class ScopeNode : public SymbolNode
@@ -499,6 +529,7 @@ public:
     std::shared_ptr<TemplateCodeType> TypeFromObjectInitializer(const Parsing::SyntaxNode &object);
     std::shared_ptr<CodeType> TypeFromArrayInitializer(const Parsing::SyntaxNode &object);
     std::shared_ptr<CodeValue> FollowDotChain(const Parsing::SyntaxNode &);
+    std::shared_ptr<CodeType> GenerateGenericType(Parsing::GenericType *generic);
 
     void GenerateMain();
 

@@ -48,13 +48,16 @@ void ModuleUnit::Compile()
         generation->SetPreCodeGenPass(0); // First pre gen pass (All types)
         syntaxTree->PreCodeGen(*generation);
 
-        generation->SetPreCodeGenPass(1); // Second pre gen pass (Template members)
+        generation->SetPreCodeGenPass(1);
         syntaxTree->PreCodeGen(*generation);
 
-        generation->SetPreCodeGenPass(2); // Second pre gen pass (Spec functions)
+        generation->SetPreCodeGenPass(10); // Second pre gen pass (Template members)
         syntaxTree->PreCodeGen(*generation);
 
-        generation->SetPreCodeGenPass(3); // Second pre gen pass (Action functions)
+        generation->SetPreCodeGenPass(20); // Second pre gen pass (Spec functions)
+        syntaxTree->PreCodeGen(*generation);
+
+        generation->SetPreCodeGenPass(30); // Second pre gen pass (Action functions)
         syntaxTree->PreCodeGen(*generation);
 
         PrintSymbols(generation->rootSymbols);

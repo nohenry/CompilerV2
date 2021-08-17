@@ -38,14 +38,22 @@
 //     i[3] = 7
 // }
 
-template Object<T> {
-    let f: uint32
+template Object<T, U> {
+    let f: T
     let x: bool
 }
 
+type Other<T, U> = Object<T, U>
+
 const main() => {
-    let o = Object<Other<int>> {
-        f: 6,
+    let o = Other<bool, Object<uint32, bool>> {
+        f: false,
         x: true
     }
+    let o1 = Object<uint32, bool> {
+        f: false,
+        x: true
+    }
+
 }
+

@@ -35,7 +35,9 @@ enum class ErrorType
     Return,
     ActionSpecStatement,
     ArrayLiteral,
-    Subscript
+    Subscript,
+    Generic,
+    Type
 };
 
 enum class ErrorCode
@@ -65,7 +67,8 @@ enum class ErrorCode
     AlreadyFound,
     NoReturn,
     NotBoolean,
-    NotIntegral
+    NotIntegral,
+    UnkownType
 };
 
 class BaseException
@@ -222,7 +225,6 @@ public:
         excpetions.push_back(v);
     }
 
-
     void clear()
     {
         excpetions.clear();
@@ -319,11 +321,11 @@ public:
  * @throws CompilerError the created exception
  * 
  */
-#define ThrowExpectedType(t, m, expected)                                                                                                                                       \
-    {                                                                                                                                                                           \
+#define ThrowExpectedType(t, m, expected)                                                                                                                                        \
+    {                                                                                                                                                                            \
         auto ___errr = new ExpectedTypeError(t, ErrorCode::ExpectedType, m, ModuleUnit::GetFptr(), tokenIterator->position, __FILE__, __LINE__, true, expected, *tokenIterator); \
-        ModuleUnit::errors.add(___errr);                                                                                                                                        \
-        throw *___errr;                                                                                                                                                         \
+        ModuleUnit::errors.add(___errr);                                                                                                                                         \
+        throw *___errr;                                                                                                                                                          \
     }
 
 /**
@@ -336,12 +338,12 @@ public:
  * @throws CompilerError the created exception
  * 
  */
-#define ThrowExpectedTypeSnippet(t, m, expected, s)                                                                                                                             \
-    {                                                                                                                                                                           \
+#define ThrowExpectedTypeSnippet(t, m, expected, s)                                                                                                                              \
+    {                                                                                                                                                                            \
         auto ___errr = new ExpectedTypeError(t, ErrorCode::ExpectedType, m, ModuleUnit::GetFptr(), tokenIterator->position, __FILE__, __LINE__, true, expected, *tokenIterator); \
-        ModuleUnit::errors.add(___errr);                                                                                                                                        \
-        s;                                                                                                                                                                      \
-        throw *___errr;                                                                                                                                                         \
+        ModuleUnit::errors.add(___errr);                                                                                                                                         \
+        s;                                                                                                                                                                       \
+        throw *___errr;                                                                                                                                                          \
     }
 
 /**

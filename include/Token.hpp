@@ -707,6 +707,19 @@ public:
         return nullptr;
     }
 
+    std::string StringFromRange(Range range)
+    {
+        uint32_t firstLen = 0;
+        auto first = FindLine(range.start.line, firstLen);
+        first += range.start.character;
+
+        uint32_t secondLen = 0;
+        auto second = FindLine(range.end.line, firstLen);
+        second += range.end.character;
+
+        return std::string(first, (size_t)second - (size_t)first);
+    }
+
     bool End()
     {
         return (uint64_t)beg + size < (uint64_t)ptr;

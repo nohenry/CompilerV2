@@ -1192,9 +1192,11 @@ namespace Parsing
 
     Expression Parser::ParseIdentifier()
     {
-        if((tokenIterator + 1)->type == TokenType::LeftAngle) {
+        if ((tokenIterator + 1)->type == TokenType::LeftAngle || (tokenIterator + 1)->type == TokenType::LeftCurly && !IsUsed(Using::If))
+        {
             auto type = ParseType();
-            if (type) {
+            if (type)
+            {
                 return ParseTemplateInitializer(type);
             }
         }

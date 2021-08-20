@@ -358,4 +358,7 @@ public:
  * 
  */
 #define CreateSampleSnippet(pos, ins) \
-    ModuleUnit::errors.add(new SampleSuggestion(ErrorType::SampleSnippet, ErrorCode::SampleSnippet, "", ModuleUnit::GetFptr(), tokenIterator->position, __FILE__, __LINE__, true, pos, ins))
+    ModuleUnit::errors.add(new SampleSuggestion(ErrorType::SampleSnippet, ErrorCode::SampleSnippet, "", ModuleUnit::GetFptr(), pos, __FILE__, __LINE__, true, pos, ins))
+
+#define CreateSnippet(pos, msg) \
+    ModuleUnit::errors.add(new SampleSuggestion(ErrorType::SampleSnippet, ErrorCode::SampleSnippet, msg, ModuleUnit::GetFptr(), pos, __FILE__, __LINE__, true, pos, ""))

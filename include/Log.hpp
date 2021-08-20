@@ -240,7 +240,7 @@ public:
         auto first = fullLine.substr(0, editPosition.start.character);
         auto second = fullLine.substr(editPosition.end.character);
 
-        auto newline = first + insert + second;
+        auto newline = insert != "" ? (first + insert + second) : fullLine;
 
         std::cerr << Colors::stylize(96) << Colors::stylize(1)
                   << std::left << std::setw(nDigits + 1) << (editPosition.start.line + 1)
@@ -252,14 +252,17 @@ public:
             std::cerr << " ";
 
         std::cerr << color::bold(color::green("| "));
-        // for (size_t i = 0; i < position.character; i++)
-        // {
-        //     std::cerr << " ";
-        // }
-        // for (size_t i = position.start.character; i < position.end.character; i++)
-        // {
-        //     std::cerr << color::bold(color::red("^"));
-        // }
+        if (insert == "")
+        {
+            for (size_t i = 0; i < editPosition.start.character; i++)
+            {
+                std::cerr << " ";
+            }
+            for (size_t i = editPosition.start.character; i < editPosition.end.character; i++)
+            {
+                std::cerr << color::bold(color::green("^"));
+            }
+        }
         std::cerr << std::endl;
     }
 };

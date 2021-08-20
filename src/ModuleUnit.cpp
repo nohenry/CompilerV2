@@ -85,7 +85,10 @@ void ModuleUnit::Compile()
         else if (pe->GetErrorCode() == ErrorCode::SampleSnippet)
         {
             auto pet = dynamic_cast<SampleSuggestion *>(e);
-            Logging::Log(color::bold(color::white("Try using the following:")));
+            if (pet->GetMessage() == "")
+                Logging::Log(color::bold(color::white("Try using the following:")));
+            else
+                Logging::Log(color::bold(color::white(pet->GetMessage())));
             Logging::SampleSnippet(fptr, pet->GetPosition(), pet->GetInsert());
             Logging::Log("");
             continue;

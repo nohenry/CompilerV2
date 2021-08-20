@@ -964,10 +964,8 @@ namespace Parsing
                 auto spec = ParseType();
                 if (spec)
                     constraints.push_back(spec);
-                if (tokenIterator->type != TokenType::Ampersand)
-                    Expect(TokenType::Comma);
-                else if (tokenIterator->type == TokenType::Comma)
-                    Next();
+                if (tokenIterator->type != TokenType::Ampersand && tokenIterator->type != TokenType::Comma && tokenIterator->type != TokenType::RightAngle)
+                    ThrowExpectedType(ErrorType::Expect, "Expected comma or right angle", TokenType::Comma);
             }
         }
         return new GenericParameterEntry(identifier, constraints);
@@ -1156,6 +1154,11 @@ namespace Parsing
             const Token &token = Next();
             return new BooleanSyntax(token);
         }
+        // case TokenType::Char:
+        // {
+        //     const Token &token = Next();
+        //     return new CharSyntax(token);
+        // }
         case TokenType::String:
         {
             const Token &token = Next();
@@ -1666,6 +1669,7 @@ std::ostream &operator<<(std::ostream &stream, const Parsing::SyntaxType &e)
         ets(Floating);
         ets(Boolean);
         ets(String);
+        ets(Char);
         ets(ArrayLiteralExpressionEntry);
         ets(ArrayLiteralBoundaryEntry);
         ets(ArrayLiteral);

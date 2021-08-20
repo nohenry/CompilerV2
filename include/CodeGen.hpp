@@ -6,6 +6,7 @@
 #include <llvm/IR/Value.h>
 
 #include <map>
+#include <unordered_map>
 #include <string>
 #include <bitset>
 #include <memory>
@@ -30,8 +31,10 @@ struct CodeType
 {
     llvm::Type *type;
     bool isSigned;
+    bool isChar;
+    bool isBool;
 
-    CodeType(llvm::Type *type, bool isSigned = false) : type{type}, isSigned{isSigned}
+    CodeType(llvm::Type *type, bool isSigned = false, bool isChar = false, bool isBool = false) : type{type}, isSigned{isSigned}, isChar{isChar}, isBool{isBool}
     {
         numCodeType++;
     }
@@ -377,6 +380,7 @@ public:
 //     const virtual SymbolNodeType GetType() const override { return SymbolNodeType::ActionNode; }
 //     const auto &GetTypename() const { return type; }
 // };
+class Spec;
 
 class TemplateNode : public SymbolNode
 {
@@ -385,14 +389,16 @@ private:
     std::vector<llvm::Type *> members;
     bool isGeneric = false;
     Parsing::GenericParameter *generic = nullptr;
-    std::vector<std::shared_ptr<CodeType>> genericParameters;
+    // std::vector<std::shared_ptr<CodeType>> genericParameters;
     Parsing::SyntaxNode *body = nullptr;
+    std::vector<std::string> orderedMembers;
+    std::vector<SpecNode *> implementedSpecs;
 
 public:
     TemplateNode(SymbolNode *parent, llvm::StructType *templ) : SymbolNode{parent}, templ{std::make_shared<TemplateCodeType>(templ, *this)} {}
     TemplateNode(SymbolNode *parent, Parsing::GenericParameter *generic, Parsing::SyntaxNode *body) : SymbolNode{parent}, templ{nullptr}, generic{generic}, isGeneric{true}, body{body} {}
-    TemplateNode(SymbolNode *parent, const std::vector<std::shared_ptr<CodeType>> &genericParameters) : SymbolNode{parent}, templ{nullptr}, genericParameters{genericParameters} {}
-    TemplateNode(SymbolNode *parent, TemplateNode &node, llvm::StructType *templ) : SymbolNode(parent), templ{std::make_shared<TemplateCodeType>(templ, *this)}, members{node.members}, genericParameters{node.genericParameters} {}
+    // TemplateNode(SymbolNode *parent, const std::vector<std::shared_ptr<CodeType>> &genericParameters) : SymbolNode{parent}, templ{nullptr}, genericParameters{genericParameters} {}
+    TemplateNode(SymbolNode *parent, TemplateNode &node, llvm::StructType *templ) : SymbolNode(parent), templ{std::make_shared<TemplateCodeType>(templ, *this)}, members{node.members} {}
 
     virtual ~TemplateNode()
     {
@@ -416,11 +422,25 @@ public:
     // }
 
     const auto GetTemplate() const { return templ; }
-    void AddMember(llvm::Type *val) { members.push_back(val); }
-    auto GetMembers() { return members; }
+    void AddMember(llvm::Type *val, std::string str)
+    {
+        members.push_back(val);
+        orderedMembers.push_back(str);
+    }
+    const auto &GetMembers() { return members; }
+    const auto &GetOrderedMembers() { return orderedMembers; }
     bool IsGeneric() const { return isGeneric; }
     auto GetGeneric() const { return generic; }
-    const auto GetBody() const { return body; }
+    auto GetBody() { return body; }
+    int IndexOf(const std::string &str) const
+    {
+        for (size_t i = 0; i < orderedMembers.size(); i++)
+            if (orderedMembers[i] == str)
+                return i;
+        return -1;
+    }
+    void Implement(SpecNode &spec) { implementedSpecs.push_back(&spec); }
+    const auto &GetImplementedSpecs() const { return implementedSpecs; }
     // const auto &GetAction() const { return actions; }
     // void AddAction(ActionNode *action) { actions.push_back(action); }
 };
@@ -524,6 +544,8 @@ public:
 
     std::shared_ptr<CodeType> LiteralType(const Parsing::SyntaxNode &node);
     std::shared_ptr<CodeType> TypeType(const Parsing::SyntaxNode &node);
+    bool TypeImplements(const Parsing::SyntaxNode &node, SpecNode *spec);
+    bool TypeImplements(std::shared_ptr<CodeType> type, SpecNode *spec);
     std::shared_ptr<CodeValue> Cast(std::shared_ptr<CodeValue> value, std::shared_ptr<CodeType> toType, bool implicit = true);
     static uint8_t GetNumBits(uint64_t val);
     std::shared_ptr<TemplateCodeType> TypeFromObjectInitializer(const Parsing::SyntaxNode &object);

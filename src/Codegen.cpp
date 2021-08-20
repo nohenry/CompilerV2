@@ -55,7 +55,13 @@ std::string LLVMTypeToString(std::shared_ptr<CodeType> base, llvm::Type *type)
         std::string s = "";
         if (!base->isSigned)
             s += "u";
-        s += static_cast<llvm::IntegerType *>(base->type)->getBitWidth();
+        int width = static_cast<llvm::IntegerType *>(base->type)->getBitWidth();
+        if (width == 8 && base->isChar)
+            s = "char";
+        else if (width == 1 && base->isBool)
+            s = "bool";
+        else
+            s += std::to_string(width);
         return s;
     }
     case llvm::Type::FunctionTyID:
@@ -120,8 +126,10 @@ std::shared_ptr<CodeType> CodeGeneration::LiteralType(const SyntaxNode &node)
     }
     case SyntaxType::Floating:
         return std::make_shared<CodeType>(llvm::Type::getDoubleTy(context));
+    // case SyntaxType::Char:
+    //     return std::make_shared<CodeType>(llvm::Type::getDoubleTy(context));
     case SyntaxType::Boolean:
-        return std::make_shared<CodeType>(llvm::Type::getInt1Ty(context));
+        return std::make_shared<CodeType>(llvm::Type::getInt1Ty(context), false, false, true);
     case SyntaxType::String:
         return std::make_shared<CodeType>(llvm::ArrayType::get(llvm::Type::getInt8Ty(context), node.As<StringSyntax>().GetValue().size() + 1));
     case SyntaxType::ArrayLiteral:
@@ -158,9 +166,11 @@ std::shared_ptr<CodeType> CodeGeneration::TypeType(const SyntaxNode &node)
         case TokenType::Uint:
             return std::make_shared<CodeType>(llvm::IntegerType::get(context, type.ivalue == 0 ? 32 : type.ivalue), false);
         case TokenType::Float:
-            return std::make_shared<CodeType>(llvm::IntegerType::getDoubleTy(context), false);
+            return std::make_shared<CodeType>(llvm::Type::getDoubleTy(context), false);
+        case TokenType::Char:
+            return std::make_shared<CodeType>(llvm::IntegerType::get(context, 8), false, true);
         case TokenType::Bool:
-            return std::make_shared<CodeType>(llvm::Type::getInt1Ty(context), false);
+            return std::make_shared<CodeType>(llvm::Type::getInt1Ty(context), false, false, true);
 
         default:
             break;
@@ -244,21 +254,46 @@ std::shared_ptr<CodeType> CodeGeneration::TypeType(const SyntaxNode &node)
                 insertPoint = lastPoint;
 
                 auto it = templ->GetGeneric()->GetParameters().begin();
+                bool bad = false;
                 for (auto p : generic.GetArguments())
                 {
-                    auto found = templ->findSymbol((*it)->GetIdentifier().raw);
-                    if (found != templ->children.end())
+                    try
                     {
-                        if (found->second->GetType() == SymbolNodeType::TypeAliasNode)
+                        auto rType = TypeType(*p);
+                        for (auto constrait : (*it)->GetConstraints())
                         {
-                            auto &node = found->second->As<TypeAliasNode>();
-
-                            node.SetReferencedType(TypeType(*p));
-                            newTempl->AddChild<TypeAliasNode>(found->first, node);
+                            if (!TypeImplements(rType, &(std::dynamic_pointer_cast<SpecCodeType>(TypeType(*constrait))->GetNode())))
+                            {
+                                ThrowCompilerError(
+                                    ErrorType::Generic, ErrorCode::ArgMisMatch,
+                                    "Generic argument `" + TypeToString(rType) + "` does not conform to constraints!",
+                                    Range(p->GetStart(), p->GetEnd()));
+                            }
                         }
+                        auto found = templ->findSymbol((*it)->GetIdentifier().raw);
+                        if (found != templ->children.end())
+                        {
+                            if (found->second->GetType() == SymbolNodeType::TypeAliasNode)
+                            {
+                                auto &node = found->second->As<TypeAliasNode>();
+
+                                node.SetReferencedType(rType);
+                                newTempl->AddChild<TypeAliasNode>(found->first, node);
+                            }
+                        }
+                    }
+                    catch (const BaseException &ex)
+                    {
+                        bad = true;
                     }
                     it++;
                 }
+                if (bad)
+                    ThrowMidCompilerErrorSnippet(
+                        ErrorType::Generic, ErrorCode::ArgMisMatch,
+                        "Aborting due to generic type error",
+                        Range(),
+                        CreateSnippet(Range(templ->GetGeneric()->GetLeft().position.start, templ->GetGeneric()->GetRight().position.end), "Generic parameters have constraints:"));
                 insertPoint = newTempl;
 
                 Use(CodeGeneration::Using::NoBlock);
@@ -288,21 +323,46 @@ std::shared_ptr<CodeType> CodeGeneration::TypeType(const SyntaxNode &node)
                 insertPoint = newTempl;
 
                 auto it = typeAlias->GetGeneric()->GetParameters().begin();
+                bool bad = false;
                 for (auto p : generic.GetArguments())
                 {
-                    auto found = typeAlias->findSymbol((*it)->GetIdentifier().raw);
-                    if (found != typeAlias->children.end())
+                    try
                     {
-                        if (found->second->GetType() == SymbolNodeType::TypeAliasNode)
+                        auto rType = TypeType(*p);
+                        for (auto constrait : (*it)->GetConstraints())
                         {
-                            auto &node = found->second->As<TypeAliasNode>();
-
-                            node.SetReferencedType(TypeType(*p));
-                            insertPoint->AddChild<TypeAliasNode>(found->first, node);
+                            if (!TypeImplements(rType, &(std::dynamic_pointer_cast<SpecCodeType>(TypeType(*constrait))->GetNode())))
+                            {
+                                ThrowCompilerError(
+                                    ErrorType::Generic, ErrorCode::ArgMisMatch,
+                                    "Generic argument `" + TypeToString(rType) + "` does not conform to constraints!",
+                                    Range(p->GetStart(), p->GetEnd()));
+                            }
                         }
+                        auto found = typeAlias->findSymbol((*it)->GetIdentifier().raw);
+                        if (found != typeAlias->children.end())
+                        {
+                            if (found->second->GetType() == SymbolNodeType::TypeAliasNode)
+                            {
+                                auto &node = found->second->As<TypeAliasNode>();
+
+                                node.SetReferencedType(TypeType(*p));
+                                insertPoint->AddChild<TypeAliasNode>(found->first, node);
+                            }
+                        }
+                    }
+                    catch (const BaseException &exc)
+                    {
+                        bad = true;
                     }
                     it++;
                 }
+                if (bad)
+                    ThrowMidCompilerErrorSnippet(
+                        ErrorType::Generic, ErrorCode::ArgMisMatch,
+                        "Aborting due to generic type error",
+                        Range(),
+                        CreateSnippet(Range(typeAlias->GetGeneric()->GetLeft().position.start, typeAlias->GetGeneric()->GetRight().position.end), "Generic parameters have constraints:"));
 
                 Use(CodeGeneration::Using::NoBlock);
 
@@ -312,7 +372,6 @@ std::shared_ptr<CodeType> CodeGeneration::TypeType(const SyntaxNode &node)
                 insertPoint = lastPoint;
 
                 return newTempl->GetReferencedType();
-
             }
         }
         else
@@ -332,6 +391,204 @@ std::shared_ptr<CodeType> CodeGeneration::TypeType(const SyntaxNode &node)
         return nullptr;
         break;
     }
+}
+
+bool CodeGeneration::TypeImplements(const SyntaxNode &node, SpecNode *spec)
+{
+    switch (node.GetType())
+    {
+    case SyntaxType::PrimitiveType:
+    {
+        auto type = node.As<PrimitiveType>().GetToken();
+        switch (type.type)
+        {
+        case TokenType::Int:
+        case TokenType::Uint:
+        case TokenType::Float:
+
+        case TokenType::Bool:
+            return true;
+        default:
+            break;
+        }
+    }
+    case SyntaxType::IdentifierType:
+    {
+        if (auto sym = FindSymbolInScope(node.As<IdentifierType>().GetToken().raw))
+        {
+            switch (sym->GetType())
+            {
+            case SymbolNodeType::TemplateNode:
+
+                return TypeImplements(dynamic_cast<TemplateNode *>(sym)->GetTemplate(), spec);
+                // return std::make_shared<TemplateCodeValue>(static_cast<llvm::StructType *>(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type), *dynamic_cast<TemplateNode *>(sym));
+            case SymbolNodeType::TypeAliasNode:
+                return TypeImplements(dynamic_cast<TypeAliasNode *>(sym)->GetReferencedType(), spec);
+                // return dynamic_cast<TypeAliasNode *>(sym)->GetReferencedType();
+                // return std::make_shared<TemplateCodeValue>(static_cast<llvm::StructType *>(dynamic_cast<TemplateNode *>(sym)->GetTemplate()->type), *dynamic_cast<TemplateNode *>(sym));
+            // case SymbolNodeType::SpecNode:
+            // return dynamic_cast<SpecNode *>(sym).
+            // return std::make_shared<SpecCodeType>(nullptr, *dynamic_cast<SpecNode *>(sym));
+            default:
+                return false;
+            }
+        }
+        ThrowCompilerError(
+            ErrorType::Type, ErrorCode::UnkownType,
+            "Unkown type `" + node.As<IdentifierType>().GetToken().raw + "`",
+            Range(node.GetStart(), node.GetEnd()));
+        return false;
+    }
+    case SyntaxType::GenericType:
+    {
+        // auto &generic = node.As<GenericType>();
+        // auto &identifier = generic.GetBaseType()->As<IdentifierType>();
+        // auto symbol = FindSymbolInScope(identifier.GetToken().raw);
+        // if (symbol)
+        // {
+        //     if (const auto templ = symbol->Cast<TemplateNode>())
+        //     {
+        //         if (templ->GetGeneric()->GetParameters().size() != generic.GetArguments().size())
+        //         {
+        //             ThrowCompilerError(
+        //                 ErrorType::Generic, ErrorCode::ArgMisMatch,
+        //                 std::string("Generic type expected ") + std::to_string(templ->GetGeneric()->GetParameters().size()) + " arguments but recieved " + std::to_string(generic.GetArguments().size()),
+        //                 Range(generic.GetLeft().position.start, generic.GetRight().position.end));
+        //         }
+
+        //         auto lastPoint = insertPoint;
+        //         insertPoint = templ->GetParent();
+
+        //         auto structType = llvm::StructType::create(context, GenerateMangledTypeName(identifier.GetToken().raw));
+        //         const auto newTempl = symbol->GetParent()->AddChild<TemplateNode>(identifier.GetToken().raw + symbol->GetParent()->GenerateName(), structType);
+        //         insertPoint = lastPoint;
+
+        //         auto it = templ->GetGeneric()->GetParameters().begin();
+        //         for (auto p : generic.GetArguments())
+        //         {
+
+        //             auto found = templ->findSymbol((*it)->GetIdentifier().raw);
+        //             if (found != templ->children.end())
+        //             {
+        //                 if (found->second->GetType() == SymbolNodeType::TypeAliasNode)
+        //                 {
+        //                     auto &node = found->second->As<TypeAliasNode>();
+
+        //                     node.SetReferencedType(TypeType(*p));
+        //                     newTempl->AddChild<TypeAliasNode>(found->first, node);
+        //                 }
+        //             }
+        //             it++;
+        //         }
+        //         insertPoint = newTempl;
+
+        //         Use(CodeGeneration::Using::NoBlock);
+
+        //         templ->GetBody()->CodeGen(*this);
+
+        //         structType->setBody(newTempl->GetMembers());
+
+        //         insertPoint = lastPoint;
+
+        //         return newTempl->GetTemplate();
+        //     }
+        //     else if (const auto typeAlias = symbol->Cast<TypeAliasNode>())
+        //     {
+        //         if (typeAlias->GetGeneric()->GetParameters().size() != generic.GetArguments().size())
+        //         {
+        //             ThrowCompilerError(
+        //                 ErrorType::Generic, ErrorCode::ArgMisMatch,
+        //                 std::string("Generic type expected ") + std::to_string(typeAlias->GetGeneric()->GetParameters().size()) + " arguments but recieved " + std::to_string(generic.GetArguments().size()),
+        //                 Range(generic.GetLeft().position.start, generic.GetRight().position.end));
+        //         }
+
+        //         auto lastPoint = insertPoint;
+        //         insertPoint = typeAlias->GetParent();
+
+        //         const auto newTempl = symbol->GetParent()->AddChild<TypeAliasNode>(identifier.GetToken().raw + symbol->GetParent()->GenerateName());
+        //         insertPoint = newTempl;
+
+        //         auto it = typeAlias->GetGeneric()->GetParameters().begin();
+        //         for (auto p : generic.GetArguments())
+        //         {
+        //             auto found = typeAlias->findSymbol((*it)->GetIdentifier().raw);
+        //             if (found != typeAlias->children.end())
+        //             {
+        //                 if (found->second->GetType() == SymbolNodeType::TypeAliasNode)
+        //                 {
+        //                     auto &node = found->second->As<TypeAliasNode>();
+
+        //                     node.SetReferencedType(TypeType(*p));
+        //                     insertPoint->AddChild<TypeAliasNode>(found->first, node);
+        //                 }
+        //             }
+        //             it++;
+        //         }
+
+        //         Use(CodeGeneration::Using::NoBlock);
+
+        //         // typeAlias->GetBody()->CodeGen(*this);
+        //         newTempl->SetReferencedType(TypeType(*typeAlias->GetBody()));
+
+        //         insertPoint = lastPoint;
+
+        //         return newTempl->GetReferencedType();
+        //     }
+        // }
+        // else
+        // {
+        //     ThrowCompilerError(
+        //         ErrorType::TemplateInitializer, ErrorCode::CannotFind,
+        //         std::string("Cannot find type ") + identifier.GetToken().raw + " in scope!",
+        //         Range(identifier.GetStart(), identifier.GetEnd()));
+        // }
+    }
+    default:
+        ThrowCompilerError(
+            ErrorType::Type, ErrorCode::UnkownType,
+            "Unkown type",
+            Range(node.GetStart(), node.GetEnd()));
+
+        return false;
+        break;
+    }
+}
+
+bool CodeGeneration::TypeImplements(std::shared_ptr<CodeType> type, SpecNode *spec)
+{
+    if (auto templ = std::dynamic_pointer_cast<TemplateCodeType>(type))
+    {
+        const auto &specs = templ->GetNode().GetImplementedSpecs();
+        auto found = std::find(specs.begin(), specs.end(), spec);
+        if (found != specs.end())
+            return true;
+    }
+    else if (auto templ = std::dynamic_pointer_cast<ArrayCodeType>(type))
+    {
+    }
+    else if (auto templ = std::dynamic_pointer_cast<FunctionCodeType>(type))
+    {
+    }
+    else if (auto templ = std::dynamic_pointer_cast<SpecCodeType>(type))
+    {
+    }
+    else
+    {
+        switch (type->type->getTypeID())
+        {
+        case llvm::Type::IntegerTyID:
+            if (type->type->getIntegerBitWidth() >= 8)
+                return true;
+            break;
+        case llvm::Type::FloatTyID:
+            return true;
+
+        default:
+            break;
+        }
+    }
+
+    return false;
 }
 
 std::shared_ptr<CodeValue> CodeGeneration::Cast(std::shared_ptr<CodeValue> value, std::shared_ptr<CodeType> toType, bool implicit)
@@ -556,7 +813,7 @@ std::shared_ptr<CodeValue> CodeGeneration::FollowDotChain(const SyntaxNode &node
                     {
                         if (IsUsed(CodeGeneration::Using::Reference)) // Return reference and don't load
                         {
-                            auto index = templNode.IndexOf(found);
+                            auto index = templNode.IndexOf(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
                             auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
                             auto value = std::make_shared<CodeValue>(gep, found->second->As<VariableNode>().GetVariable()->type);
@@ -565,7 +822,7 @@ std::shared_ptr<CodeValue> CodeGeneration::FollowDotChain(const SyntaxNode &node
                         }
                         else // Load value
                         {
-                            auto index = templNode.IndexOf(found);
+                            auto index = templNode.IndexOf(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
                             auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
                             auto load = builder.CreateLoad(templ->type, gep);
@@ -613,7 +870,7 @@ std::shared_ptr<CodeValue> CodeGeneration::FollowDotChain(const SyntaxNode &node
                     }
                     else // Load value
                     {
-                        auto index = templNode.IndexOf(found);
+                        auto index = templNode.IndexOf(bin.GetRHS().As<IdentifierExpression>().GetIdentiferToken().raw);
                         auto gep = builder.CreateStructGEP(templ->type, left->value, index);
 
                         auto load = builder.CreateLoad(templ->type, gep);
@@ -708,9 +965,10 @@ namespace Parsing
                 }
                 else if (keyword.type == TokenType::Let)
                 {
-                    auto inst = gen.CreateEntryBlockAlloca(gen.TypeType(*this->type)->type, identifier.raw); // Allocate the variable on the stack
+                    auto type = gen.TypeType(*this->type);
+                    auto inst = gen.CreateEntryBlockAlloca(type->type, identifier.raw); // Allocate the variable on the stack
 
-                    auto varValue = std::make_shared<CodeValue>(inst, gen.TypeType(*this->type));
+                    auto varValue = std::make_shared<CodeValue>(inst, type);
                     gen.SetCurrentVar(varValue);
 
                     initializer->CodeGen(gen);
@@ -875,7 +1133,7 @@ namespace Parsing
             {
                 auto &tn = gen.GetInsertPoint()->As<TemplateNode>();
                 if (!tn.IsGeneric())
-                    tn.AddMember(type->type);
+                    tn.AddMember(type->type, identifier.raw);
 
                 auto val = std::make_shared<CodeValue>(nullptr, type);
                 gen.GetInsertPoint()->AddChild<VariableNode>(identifier.raw, val);
@@ -1668,6 +1926,12 @@ namespace Parsing
         return std::make_shared<CodeValue>(llvm::ConstantArray::get(static_cast<llvm::ArrayType *>(type->type), llvm::makeArrayRef(vals)), type);
     }
 
+    // std::shared_ptr<CodeValue> CharSyntax::CodeGen(CodeGeneration &gen) const
+    // {
+    //     auto type = gen.LiteralType(*this);
+    //     return std::make_shared<CodeValue>(llvm::ConstantArray::get(static_cast<llvm::ArrayType *>(type->type), llvm::makeArrayRef(vals)), type);
+    // }
+
     std::shared_ptr<CodeValue> BooleanSyntax::CodeGen(CodeGeneration &gen) const
     {
         auto type = gen.LiteralType(*this);
@@ -2030,8 +2294,9 @@ namespace Parsing
                 auto found = node.findSymbol(key);
                 if (found != children.end() && found->second->GetType() == SymbolNodeType::VariableNode)
                 {
-                    int index = node.IndexOf(found);
-
+                    // int index = node.IndexOf(found);
+                    // int index = std::find(templ->node.GetOrderedMembers().
+                    int index = templ->node.IndexOf(key);
                     auto gep = gen.GetBuilder().CreateStructGEP(node.GetTemplate()->type, strc, index);
                     auto newVal = std::make_shared<CodeValue>(gep, found->second->As<VariableNode>().GetVariable()->type);
                     gen.SetCurrentVar(newVal);
@@ -2079,7 +2344,7 @@ namespace Parsing
                 auto found = node.findSymbol(key);
                 if (found != node.children.end() && found->second->GetType() == SymbolNodeType::VariableNode)
                 {
-                    int index = node.IndexOf(found);
+                    int index = node.IndexOf(key);
                     auto gep = gen.GetBuilder().CreateStructGEP(templ->type, tmpVal->value, index);
                     // std::make_shared<CodeType>(gep->getType())
                     auto newVal = std::make_shared<CodeValue>(gep, found->second->As<VariableNode>().GetVariable()->type);
@@ -2239,12 +2504,18 @@ namespace Parsing
             {
                 auto &node = std::static_pointer_cast<TemplateCodeType>(type)->GetNode();
                 auto &specNode = std::static_pointer_cast<SpecCodeType>(specType)->GetNode();
+                node.Implement(specNode);
 
                 gen.SetInsertPoint(&node);
 
                 gen.SetCurrentType(node.GetTemplate());
 
                 gen.Use(CodeGeneration::Using::NoBlock);
+                std::unordered_map<std::string, bool> symbols;
+                for (auto c : specNode.children)
+                {
+                    symbols[c.first] = false;
+                }
 
                 for (auto &stmt : body->GetStatements())
                 {
@@ -2254,6 +2525,7 @@ namespace Parsing
                     {
                         auto &func = stmt->As<FunctionDeclerationStatement>();
                         auto found = specNode.findSymbol(func.GetIdentifier().raw);
+                        symbols[func.GetIdentifier().raw] = true;
 
                         if (found != specNode.children.end() && found->second->GetType() != SymbolNodeType::FunctionNode)
                         {
@@ -2264,6 +2536,7 @@ namespace Parsing
                         }
                         else if (found != specNode.children.end())
                         {
+                            std::dynamic_pointer_cast<TemplateCodeType>(type)->GetNode().GetBody()->As<BlockStatement<>>().GetStatements().push_back(&func);
                             auto &foundFunc = found->second->As<FunctionNode>();
 
                             auto retType = (func.GetRetType() == nullptr ? std::make_shared<CodeType>(llvm::Type::getVoidTy(gen.GetContext())) : gen.TypeType(*func.GetRetType()));
@@ -2356,6 +2629,31 @@ namespace Parsing
 
                     default:
                         break;
+                    }
+                }
+
+                for (auto f : symbols)
+                {
+                    if (!f.second)
+                    {
+                        auto found = specNode.findSymbol(f.first);
+                        if (found != specNode.children.end())
+                        {
+                            if (found->second->GetType() == SymbolNodeType::FunctionNode)
+                            {
+                                ThrowCompilerError(
+                                    ErrorType::ActionSpecStatement, ErrorCode::CannotFind,
+                                    "Function " + f.first + " not implemented in action!",
+                                    Range(keyword.position.start, this->specType->GetEnd()));
+                            }
+                            else if (found->second->GetType() == SymbolNodeType::TypeAliasNode)
+                            {
+                                ThrowCompilerError(
+                                    ErrorType::ActionSpecStatement, ErrorCode::CannotFind,
+                                    "Type alias " + f.first + " not implemented in action!",
+                                    Range(keyword.position.start, this->specType->GetEnd()));
+                            }
+                        }
                     }
                 }
 

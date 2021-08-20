@@ -21,6 +21,7 @@ namespace Parsing
         Floating,
         Boolean,
         String,
+        Char,
         ObjectKeyValue,
         ObjectInitializer,
         TemplateInitializer,
@@ -69,6 +70,7 @@ namespace Parsing
         GenericType,
 
         ExportDecleration,
+    
     };
 
     class SyntaxNode

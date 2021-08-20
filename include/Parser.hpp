@@ -453,11 +453,51 @@ namespace Parsing
     public:
         StringSyntax(const Token &token) : token{token}
         {
-            assert(token.type == TokenType::String && "Token should be an boolean token");
+            assert(token.type == TokenType::String && "Token should be a string token");
         }
         virtual ~StringSyntax() {}
 
         virtual const SyntaxType GetType() const override { return SyntaxType::String; }
+
+        virtual const uint8_t NumChildren() const override
+        {
+            return 0;
+        }
+
+        virtual const SyntaxNode &operator[](int index) const override
+        {
+            return *this;
+        }
+
+        virtual const Position &GetStart() const override
+        {
+            return token.GetStart();
+        }
+
+        virtual const Position &GetEnd() const override
+        {
+            return token.GetEnd();
+        }
+
+        virtual std::shared_ptr<CodeValue> CodeGen(CodeGeneration &gen) const override;
+
+        const auto &GetToken() const { return token; }
+        const auto &GetValue() const { return token.raw; }
+    };
+    
+    class CharSyntax : public ExpressionSyntax
+    {
+    private:
+        const Token &token;
+
+    public:
+        CharSyntax(const Token &token) : token{token}
+        {
+            assert(token.type == TokenType::String && "Token should be a char token");
+        }
+        virtual ~CharSyntax() {}
+
+        virtual const SyntaxType GetType() const override { return SyntaxType::Char; }
 
         virtual const uint8_t NumChildren() const override
         {
@@ -1364,6 +1404,7 @@ namespace Parsing
         }
 
         const auto &GetOpen() const { return open; }
+        auto &GetStatements() { return statements; }
         const auto &GetStatements() const { return statements; }
         const auto &GetClose() const { return close; }
     };
